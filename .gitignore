@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local overrides (secrets, URLs propias) ###
+application-local-secret.properties
