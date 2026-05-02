@@ -34,3 +34,4 @@ build/
 
 ### Local overrides (secrets, URLs propias) ###
 application-local-secret.properties
+.env
