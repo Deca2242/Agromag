@@ -1,5 +1,6 @@
 package com.agromag.domain.entities;
 
+import com.agromag.domain.enums.Municipality;
 import com.agromag.domain.enums.Role;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -36,8 +37,9 @@ public class Profile {
 	@Column(name = "full_name", nullable = false)
 	private String fullName;
 
+	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
-	private String municipality;
+	private Municipality municipality;
 
 	@Column(name = "created_at", updatable = false)
 	private LocalDateTime createdAt;

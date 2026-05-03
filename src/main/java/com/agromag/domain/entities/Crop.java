@@ -1,6 +1,7 @@
 package com.agromag.domain.entities;
 
 import com.agromag.domain.enums.CropType;
+import com.agromag.domain.enums.Municipality;
 import com.agromag.domain.enums.SyncStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -36,8 +37,9 @@ public class Crop {
 	@Column(name = "area_hectares")
 	private BigDecimal areaHectares;
 
+	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
-	private String municipality;
+	private Municipality municipality;
 
 	@Column(name = "sown_date", nullable = false)
 	private LocalDate sownDate;

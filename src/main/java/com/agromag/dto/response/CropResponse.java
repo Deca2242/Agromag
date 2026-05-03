@@ -1,6 +1,7 @@
 package com.agromag.dto.response;
 
 import com.agromag.domain.enums.CropType;
+import com.agromag.domain.enums.Municipality;
 import com.agromag.domain.enums.SyncStatus;
 
 import java.math.BigDecimal;
@@ -12,7 +13,7 @@ public record CropResponse(
 		UUID id,
 		CropType cropType,
 		BigDecimal areaHectares,
-		String municipality,
+		Municipality municipality,
 		LocalDate sownDate,
 		SyncStatus syncStatus,
 		LocalDateTime createdAt
