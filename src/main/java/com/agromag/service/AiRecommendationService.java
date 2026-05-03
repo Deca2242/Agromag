@@ -76,7 +76,6 @@ public class AiRecommendationService {
 		} catch (AiServiceException e) {
 			throw e;
 		} catch (Exception e) {
-			e.printStackTrace();
 			throw new AiServiceException("Error al generar recomendación de fertilización con IA", e);
 		}
 	}
