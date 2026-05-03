@@ -80,4 +80,42 @@ public class CropEventService {
 				event.getOccurredAt()
 		);
 	}
+
+	/**
+	 * Actualiza un evento existente, verificando la propiedad del cultivo.
+	 */
+	@Transactional
+	public CropEventResponse updateEvent(UUID eventId, UUID profileId, CropEventRequest request) {
+		CropEvent event = cropEventRepository.findById(eventId)
+				.orElseThrow(() -> new ResourceNotFoundException("Evento", eventId));
+
+		// Validar propiedad del cultivo (podría ser el original o al que se quiere mover)
+		cropService.findCropAndValidateOwnership(event.getCrop().getId(), profileId);
+		if (!event.getCrop().getId().equals(request.cropId())) {
+			Crop newCrop = cropService.findCropAndValidateOwnership(request.cropId(), profileId);
+			event.setCrop(newCrop);
+		}
+
+		event.setEventType(request.eventType());
+		event.setQuantity(request.quantity());
+		event.setUnit(request.unit());
+		event.setNotes(request.notes());
+		event.setOccurredAt(request.occurredAt());
+		event.setSyncStatus(SyncStatus.SYNCED);
+
+		return toResponse(cropEventRepository.save(event));
+	}
+
+	/**
+	 * Elimina un evento tras verificar la propiedad del cultivo asociado.
+	 */
+	@Transactional
+	public void deleteEvent(UUID eventId, UUID profileId) {
+		CropEvent event = cropEventRepository.findById(eventId)
+				.orElseThrow(() -> new ResourceNotFoundException("Evento", eventId));
+
+		cropService.findCropAndValidateOwnership(event.getCrop().getId(), profileId);
+
+		cropEventRepository.delete(event);
+	}
 }
