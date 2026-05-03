@@ -49,6 +49,11 @@ public class AiRecommendationService {
 					.call()
 					.content();
 
+			// Remove possible markdown formatting from the response
+			if (aiResponse != null) {
+				aiResponse = aiResponse.replaceAll("```json", "").replaceAll("```", "").trim();
+			}
+
 			JsonNode json = objectMapper.readTree(aiResponse);
 
 			String cropStage = json.get("cropStage").asText();
@@ -66,18 +71,18 @@ public class AiRecommendationService {
 					recommendedDose,
 					level,
 					message,
-					LocalDateTime.now()
-			);
+					LocalDateTime.now());
 
 		} catch (AiServiceException e) {
 			throw e;
 		} catch (Exception e) {
+			e.printStackTrace();
 			throw new AiServiceException("Error al generar recomendación de fertilización con IA", e);
 		}
 	}
 
 	private String buildFertilizerPrompt(Crop crop, CropParameter params,
-										 ClimateData climate, long weeksSinceSowing) {
+			ClimateData climate, long weeksSinceSowing) {
 		return """
 				Eres un agrónomo experto en cultivos tropicales del Magdalena, Colombia.
 
@@ -134,7 +139,6 @@ public class AiRecommendationService {
 				params.getIrrigationNeeds(),
 				params.getRecommendedFertilizer(),
 				climate.temperature(),
-				climate.humidity()
-		);
+				climate.humidity());
 	}
 }
