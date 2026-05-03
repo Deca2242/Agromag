@@ -29,17 +29,24 @@ public class ClimateService {
 	 */
 	public ClimateData getCurrentClimate(Municipality municipality) {
 		try {
-			JsonNode response = openMeteoWebClient.get()
+			String responseString = openMeteoWebClient.get()
 					.uri(uriBuilder -> uriBuilder
 							.queryParam("latitude", municipality.getLatitude())
 							.queryParam("longitude", municipality.getLongitude())
 							.queryParam("current", "temperature_2m,relative_humidity_2m")
 							.build())
 					.retrieve()
-					.bodyToMono(JsonNode.class)
+					.bodyToMono(String.class)
 					.block();
 
-			if (response == null || !response.has("current")) {
+			if (responseString == null) {
+				throw new ClimateServiceException("Respuesta nula de Open-Meteo para " + municipality.getDisplayName());
+			}
+
+			com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			JsonNode response = mapper.readTree(responseString);
+
+			if (!response.has("current")) {
 				throw new ClimateServiceException(
 						"Respuesta inválida de Open-Meteo para " + municipality.getDisplayName());
 			}
