@@ -44,6 +44,7 @@ public class Profile {
 	@Column(name = "created_at", updatable = false)
 	private LocalDateTime createdAt;
 
+	@com.fasterxml.jackson.annotation.JsonIgnore
 	@OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = false)
 	private List<Crop> crops = new ArrayList<>();
 
