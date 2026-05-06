@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.UUID;
 
+// Acceso a datos de eventos de cultivos
 public interface CropEventRepository extends JpaRepository<CropEvent, UUID> {
 
 	List<CropEvent> findByCrop_Id(UUID cropId);

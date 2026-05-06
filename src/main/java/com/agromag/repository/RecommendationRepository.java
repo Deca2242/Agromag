@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+// Acceso a datos de recomendaciones
 public interface RecommendationRepository extends JpaRepository<Recommendation, UUID> {
 
 	List<Recommendation> findByCrop_Id(UUID cropId);
