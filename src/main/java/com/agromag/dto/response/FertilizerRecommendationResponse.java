@@ -5,6 +5,7 @@ import com.agromag.domain.enums.RiskLevel;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Respuesta de recomendación de fertilización generada por IA
 public record FertilizerRecommendationResponse(
 		UUID id,
 		UUID cropId,

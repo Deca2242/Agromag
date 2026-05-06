@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+// Request para crear/actualizar un cultivo
 public record CropRequest(
 		@NotNull UUID id,
 		@NotNull CropType cropType,

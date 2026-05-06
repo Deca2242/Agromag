@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Request para crear/actualizar un evento de cultivo
 public record CropEventRequest(
 		@NotNull UUID id,
 		@NotNull UUID cropId,

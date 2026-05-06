@@ -1,11 +1,14 @@
 package com.agromag.dto.request;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 
+// Lote de sincronización offline → servidor
 public record SyncBatchRequest(
-		List<CropRequest> crops,
-		List<CropEventRequest> events,
-		List<RecommendationDecisionRequest> decisions
+		@Valid List<CropRequest> crops,
+		@Valid List<CropEventRequest> events,
+		@Valid List<RecommendationDecisionRequest> decisions
 ) {
 	public SyncBatchRequest {
 		if (crops == null) {
