@@ -15,6 +15,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
+// Endpoints de recomendaciones de riego, fertilización y decisiones
 @RestController
 @RequestMapping("/api")
 public class RecommendationController {

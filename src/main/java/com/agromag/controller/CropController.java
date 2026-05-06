@@ -13,6 +13,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
+// CRUD de cultivos del usuario autenticado
 @RestController
 @RequestMapping("/api/crops")
 public class CropController {

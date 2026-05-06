@@ -2,12 +2,13 @@ package com.agromag.service;
 
 import com.agromag.domain.entities.Crop;
 import com.agromag.domain.entities.CropParameter;
-import com.agromag.domain.enums.RecommendationType;
 import com.agromag.domain.enums.RiskLevel;
 import com.agromag.dto.response.FertilizerRecommendationResponse;
 import com.agromag.exception.AiServiceException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
@@ -16,33 +17,29 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-/**
- * Servicio que delega a Spring AI (OpenAI) la generación de
- * recomendaciones de fertilización basadas en datos del cultivo,
- * parámetros agronómicos y condiciones climáticas.
- */
+// Delega a Spring AI (OpenAI) la generación de recomendaciones de fertilización
 @Service
 public class AiRecommendationService {
+
+	private static final Logger log = LoggerFactory.getLogger(AiRecommendationService.class);
 
 	private final ChatClient chatClient;
 	private final ObjectMapper objectMapper;
 
-	public AiRecommendationService(ChatClient.Builder chatClientBuilder) {
+	public AiRecommendationService(ChatClient.Builder chatClientBuilder, ObjectMapper objectMapper) {
 		this.chatClient = chatClientBuilder.build();
-		this.objectMapper = new ObjectMapper();
+		this.objectMapper = objectMapper;
 	}
 
-	/**
-	 * Genera una recomendación de fertilización usando IA.
-	 * Construye un prompt agronómico con los datos del cultivo
-	 * y parsea la respuesta JSON del modelo.
-	 */
+	// Genera recomendación de fertilización usando IA, construyendo un prompt agronómico
 	public FertilizerRecommendationResponse generateFertilizerRecommendation(
 			Crop crop, CropParameter params, ClimateData climate) {
 		try {
 			long weeksSinceSowing = ChronoUnit.WEEKS.between(crop.getSownDate(), LocalDate.now());
 
 			String prompt = buildFertilizerPrompt(crop, params, climate, weeksSinceSowing);
+
+			log.info("ai_request cropId={} weeks={}", crop.getId(), weeksSinceSowing);
 
 			String aiResponse = chatClient.prompt()
 					.user(prompt)
@@ -56,11 +53,22 @@ public class AiRecommendationService {
 
 			JsonNode json = objectMapper.readTree(aiResponse);
 
-			String cropStage = json.get("cropStage").asText();
-			String recommendedNutrient = json.get("recommendedNutrient").asText();
-			String recommendedDose = json.get("recommendedDose").asText();
-			RiskLevel level = RiskLevel.valueOf(json.get("level").asText().toUpperCase());
-			String message = json.get("message").asText();
+			// Parseo seguro: verificar que cada campo exista antes de leerlo
+			String cropStage = safeText(json, "cropStage");
+			String recommendedNutrient = safeText(json, "recommendedNutrient");
+			String recommendedDose = safeText(json, "recommendedDose");
+			String levelText = safeText(json, "level");
+			String message = safeText(json, "message");
+
+			RiskLevel level;
+			try {
+				level = RiskLevel.valueOf(levelText.toUpperCase());
+			} catch (IllegalArgumentException e) {
+				log.warn("ai_unknown_risk_level value={} defaulting_to=MEDIUM", levelText);
+				level = RiskLevel.MEDIUM;
+			}
+
+			log.info("ai_response cropId={} stage={} level={}", crop.getId(), cropStage, level);
 
 			return new FertilizerRecommendationResponse(
 					UUID.randomUUID(),
@@ -76,8 +84,18 @@ public class AiRecommendationService {
 		} catch (AiServiceException e) {
 			throw e;
 		} catch (Exception e) {
+			log.error("ai_error cropId={}", crop.getId(), e);
 			throw new AiServiceException("Error al generar recomendación de fertilización con IA", e);
 		}
+	}
+
+	// Extrae texto de un JsonNode de forma segura — devuelve "No disponible" si falta
+	private String safeText(JsonNode json, String field) {
+		if (json == null || !json.has(field) || json.get(field).isNull()) {
+			log.warn("ai_missing_field field={}", field);
+			return "No disponible";
+		}
+		return json.get(field).asText();
 	}
 
 	private String buildFertilizerPrompt(Crop crop, CropParameter params,

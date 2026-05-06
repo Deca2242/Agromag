@@ -1,9 +1,10 @@
 package com.agromag.controller;
 
-import com.agromag.domain.entities.Profile;
-import com.agromag.domain.enums.Municipality;
+import com.agromag.dto.request.ProfileUpdateRequest;
+import com.agromag.dto.response.ProfileResponse;
 import com.agromag.service.ProfileService;
 import com.agromag.util.SecurityUtils;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.UUID;
 
+// Endpoints de perfil del usuario autenticado
 @RestController
 @RequestMapping("/api/profile")
 public class ProfileController {
@@ -21,28 +23,22 @@ public class ProfileController {
 		this.profileService = profileService;
 	}
 
-	/**
-	 * Obtiene el perfil del usuario autenticado.
-	 * Si es la primera vez, lo crea automáticamente (auto-registro).
-	 */
+	// Obtiene el perfil del usuario autenticado (auto-registro si es la primera vez)
 	@GetMapping
-	public ResponseEntity<Profile> getProfile(Principal principal) {
+	public ResponseEntity<ProfileResponse> getProfile(Principal principal) {
 		UUID userId = SecurityUtils.getCurrentUserId(principal);
 		String email = ((JwtAuthenticationToken) principal).getToken().getClaimAsString("email");
-		Profile profile = profileService.getOrCreateProfile(userId, email);
+		ProfileResponse profile = profileService.getOrCreateProfile(userId, email);
 		return ResponseEntity.ok(profile);
 	}
 
-	/**
-	 * Actualiza los datos del perfil (fullName y municipality).
-	 */
+	// Actualiza los datos del perfil (fullName y municipality)
 	@PutMapping
-	public ResponseEntity<Profile> updateProfile(
+	public ResponseEntity<ProfileResponse> updateProfile(
 			Principal principal,
-			@RequestParam String fullName,
-			@RequestParam Municipality municipality) {
+			@Valid @RequestBody ProfileUpdateRequest request) {
 		UUID userId = SecurityUtils.getCurrentUserId(principal);
-		Profile profile = profileService.updateProfile(userId, fullName, municipality);
+		ProfileResponse profile = profileService.updateProfile(userId, request.fullName(), request.municipality());
 		return ResponseEntity.ok(profile);
 	}
 }

@@ -13,6 +13,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
+// CRUD de eventos dentro de un cultivo
 @RestController
 @RequestMapping("/api/crops/{cropId}/events")
 public class CropEventController {
@@ -29,7 +30,7 @@ public class CropEventController {
 			@PathVariable UUID cropId,
 			@Valid @RequestBody CropEventRequest request) {
 		UUID userId = SecurityUtils.getCurrentUserId(principal);
-		CropEventResponse response = cropEventService.createEvent(userId, request);
+		CropEventResponse response = cropEventService.createEvent(userId, cropId, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 

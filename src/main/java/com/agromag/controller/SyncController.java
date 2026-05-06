@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.UUID;
 
+// Endpoint de sincronización batch (offline → servidor)
 @RestController
 @RequestMapping("/api/sync")
 public class SyncController {
