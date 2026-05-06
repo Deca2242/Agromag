@@ -13,6 +13,8 @@ import com.agromag.dto.response.RecommendationResponse;
 import com.agromag.exception.ResourceNotFoundException;
 import com.agromag.repository.CropParameterRepository;
 import com.agromag.repository.RecommendationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,8 +23,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+// Lógica de generación de recomendaciones (riego + fertilización con IA)
 @Service
 public class RecommendationService {
+
+	private static final Logger log = LoggerFactory.getLogger(RecommendationService.class);
 
 	private final RecommendationRepository recommendationRepository;
 	private final CropParameterRepository cropParameterRepository;
@@ -42,20 +47,17 @@ public class RecommendationService {
 		this.aiRecommendationService = aiRecommendationService;
 	}
 
-	/**
-	 * Lista todas las recomendaciones de un cultivo.
-	 */
+	// Lista todas las recomendaciones de un cultivo
+	@Transactional(readOnly = true)
 	public List<RecommendationResponse> getRecommendationsByCrop(UUID cropId, UUID profileId) {
 		cropService.findCropAndValidateOwnership(cropId, profileId);
 
 		return recommendationRepository.findByCrop_Id(cropId).stream()
-				.map(this::toResponse)
+				.map(RecommendationResponse::from)
 				.toList();
 	}
 
-	/**
-	 * Marca si el usuario siguió o no una recomendación.
-	 */
+	// Marca si el usuario siguió o no una recomendación
 	@Transactional
 	public void markDecision(UUID profileId, RecommendationDecisionRequest request) {
 		Recommendation rec = recommendationRepository.findById(request.recommendationId())
@@ -66,12 +68,10 @@ public class RecommendationService {
 
 		rec.setFollowed(request.followed());
 		recommendationRepository.save(rec);
+		log.info("mark_decision recommendationId={} followed={}", request.recommendationId(), request.followed());
 	}
 
-	/**
-	 * Genera una recomendación de riego basada en la temperatura actual
-	 * del municipio del cultivo vs. la temperatura óptima máxima.
-	 */
+	// Genera recomendación de riego basada en temperatura y humedad vs. parámetros óptimos
 	@Transactional
 	public IrrigationRecommendationResponse generateIrrigation(UUID cropId, UUID profileId) {
 		Crop crop = cropService.findCropAndValidateOwnership(cropId, profileId);
@@ -123,6 +123,8 @@ public class RecommendationService {
 		rec.setSyncStatus(SyncStatus.SYNCED);
 		recommendationRepository.save(rec);
 
+		log.info("generate_irrigation cropId={} level={}", cropId, level);
+
 		return new IrrigationRecommendationResponse(
 				rec.getId(),
 				crop.getId(),
@@ -133,10 +135,7 @@ public class RecommendationService {
 		);
 	}
 
-	/**
-	 * Genera una recomendación de fertilización delegando a la IA (Spring AI).
-	 * Persiste el resultado como Recommendation en la base de datos.
-	 */
+	// Genera recomendación de fertilización delegando a la IA (Spring AI)
 	@Transactional
 	public FertilizerRecommendationResponse generateFertilizer(UUID cropId, UUID profileId) {
 		Crop crop = cropService.findCropAndValidateOwnership(cropId, profileId);
@@ -147,6 +146,7 @@ public class RecommendationService {
 		ClimateData climate = climateService.getCurrentClimate(crop.getMunicipality());
 
 		// Delegar a IA
+		log.info("generate_fertilizer cropId={} delegating_to_ai", cropId);
 		FertilizerRecommendationResponse aiResult =
 				aiRecommendationService.generateFertilizerRecommendation(crop, params, climate);
 
@@ -163,19 +163,8 @@ public class RecommendationService {
 		rec.setSyncStatus(SyncStatus.SYNCED);
 		recommendationRepository.save(rec);
 
-		return aiResult;
-	}
+		log.info("generate_fertilizer cropId={} level={} nutrient={}", cropId, aiResult.level(), aiResult.recommendedNutrient());
 
-	private RecommendationResponse toResponse(Recommendation rec) {
-		return new RecommendationResponse(
-				rec.getId(),
-				rec.getType(),
-				rec.getLevel(),
-				rec.getMessage(),
-				rec.getFollowed(),
-				rec.getGeneratedAt(),
-				rec.getTemperature(),
-				rec.getHumidity()
-		);
+		return aiResult;
 	}
 }

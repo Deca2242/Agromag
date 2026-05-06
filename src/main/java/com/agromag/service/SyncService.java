@@ -2,7 +2,6 @@ package com.agromag.service;
 
 import com.agromag.domain.entities.Crop;
 import com.agromag.domain.entities.CropEvent;
-import com.agromag.domain.enums.SyncStatus;
 import com.agromag.dto.request.CropEventRequest;
 import com.agromag.dto.request.CropRequest;
 import com.agromag.dto.request.RecommendationDecisionRequest;
@@ -12,20 +11,23 @@ import com.agromag.dto.response.CropResponse;
 import com.agromag.dto.response.SyncBatchResponse;
 import com.agromag.repository.CropEventRepository;
 import com.agromag.repository.CropRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * Orquestador de sincronización offline → online.
- * Procesa lotes de cultivos, eventos y decisiones de forma idempotente.
- */
+// Procesamiento de sincronización batch offline → servidor
 @Service
 public class SyncService {
+
+	private static final Logger log = LoggerFactory.getLogger(SyncService.class);
 
 	private final CropRepository cropRepository;
 	private final CropEventRepository cropEventRepository;
@@ -45,29 +47,47 @@ public class SyncService {
 		this.recommendationService = recommendationService;
 	}
 
-	/**
-	 * Procesa un lote de sincronización del cliente móvil.
-	 * Orden: 1) Cultivos  2) Eventos  3) Decisiones de recomendación.
-	 * Es idempotente: si un UUID ya existe, se omite.
-	 */
 	@Transactional
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
+		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",
+				profileId, request.crops().size(), request.events().size(), request.decisions().size());
+
 		List<CropResponse> syncedCrops = new ArrayList<>();
 		List<CropEventResponse> syncedEvents = new ArrayList<>();
 
-		// 1. Sincronizar cultivos
-		for (CropRequest cropReq : request.crops()) {
-			if (!cropRepository.existsById(cropReq.id())) {
-				CropResponse created = cropService.createCrop(profileId, cropReq);
-				syncedCrops.add(created);
+		// 1. Sincronizar cultivos — batch check para evitar N+1
+		if (!request.crops().isEmpty()) {
+			Set<UUID> requestedCropIds = request.crops().stream()
+					.map(CropRequest::id)
+					.collect(Collectors.toSet());
+
+			Set<UUID> existingCropIds = cropRepository.findAllById(requestedCropIds).stream()
+					.map(Crop::getId)
+					.collect(Collectors.toSet());
+
+			for (CropRequest cropReq : request.crops()) {
+				if (!existingCropIds.contains(cropReq.id())) {
+					CropResponse created = cropService.createCrop(profileId, cropReq);
+					syncedCrops.add(created);
+				}
 			}
 		}
 
-		// 2. Sincronizar eventos
-		for (CropEventRequest eventReq : request.events()) {
-			if (!cropEventRepository.existsById(eventReq.id())) {
-				CropEventResponse created = cropEventService.createEvent(profileId, eventReq);
-				syncedEvents.add(created);
+		// 2. Sincronizar eventos — batch check para evitar N+1
+		if (!request.events().isEmpty()) {
+			Set<UUID> requestedEventIds = request.events().stream()
+					.map(CropEventRequest::id)
+					.collect(Collectors.toSet());
+
+			Set<UUID> existingEventIds = cropEventRepository.findAllById(requestedEventIds).stream()
+					.map(CropEvent::getId)
+					.collect(Collectors.toSet());
+
+			for (CropEventRequest eventReq : request.events()) {
+				if (!existingEventIds.contains(eventReq.id())) {
+					CropEventResponse created = cropEventService.createEvent(profileId, eventReq);
+					syncedEvents.add(created);
+				}
 			}
 		}
 
@@ -78,6 +98,9 @@ public class SyncService {
 
 		String message = String.format("Sincronización completada: %d cultivos, %d eventos, %d decisiones procesadas",
 				syncedCrops.size(), syncedEvents.size(), request.decisions().size());
+
+		log.info("sync_batch_done profileId={} synced_crops={} synced_events={}",
+				profileId, syncedCrops.size(), syncedEvents.size());
 
 		return new SyncBatchResponse(
 				"OK",

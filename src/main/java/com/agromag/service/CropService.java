@@ -8,14 +8,19 @@ import com.agromag.dto.response.CropResponse;
 import com.agromag.exception.ResourceNotFoundException;
 import com.agromag.exception.UnauthorizedCropAccessException;
 import com.agromag.repository.CropRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
+// Lógica de negocio para cultivos con validación de propiedad
 @Service
 public class CropService {
+
+	private static final Logger log = LoggerFactory.getLogger(CropService.class);
 
 	private final CropRepository cropRepository;
 	private final ProfileService profileService;
@@ -25,10 +30,7 @@ public class CropService {
 		this.profileService = profileService;
 	}
 
-	/**
-	 * Crea un cultivo asociado al perfil del usuario.
-	 * El ID viene del cliente (soporte offline).
-	 */
+	// Crea un cultivo asociado al perfil (el ID viene del cliente para soporte offline)
 	@Transactional
 	public CropResponse createCrop(UUID profileId, CropRequest request) {
 		Profile profile = profileService.getProfileById(profileId);
@@ -42,28 +44,25 @@ public class CropService {
 		crop.setSownDate(request.sownDate());
 		crop.setSyncStatus(SyncStatus.SYNCED);
 
-		return toResponse(cropRepository.save(crop));
+		log.info("create_crop cropId={} profileId={} type={}", request.id(), profileId, request.cropType());
+		return CropResponse.from(cropRepository.save(crop));
 	}
 
-	/**
-	 * Lista todos los cultivos del usuario autenticado.
-	 */
+	// Lista todos los cultivos del usuario autenticado
+	@Transactional(readOnly = true)
 	public List<CropResponse> getCropsByProfile(UUID profileId) {
 		return cropRepository.findByProfile_Id(profileId).stream()
-				.map(this::toResponse)
+				.map(CropResponse::from)
 				.toList();
 	}
 
-	/**
-	 * Obtiene un cultivo verificando que pertenece al usuario.
-	 */
+	// Obtiene un cultivo verificando que pertenece al usuario
+	@Transactional(readOnly = true)
 	public CropResponse getCropById(UUID cropId, UUID profileId) {
-		return toResponse(findCropAndValidateOwnership(cropId, profileId));
+		return CropResponse.from(findCropAndValidateOwnership(cropId, profileId));
 	}
 
-	/**
-	 * Actualiza un cultivo existente verificando propiedad.
-	 */
+	// Actualiza un cultivo existente verificando propiedad
 	@Transactional
 	public CropResponse updateCrop(UUID cropId, UUID profileId, CropRequest request) {
 		Crop crop = findCropAndValidateOwnership(cropId, profileId);
@@ -71,23 +70,19 @@ public class CropService {
 		crop.setAreaHectares(request.areaHectares());
 		crop.setMunicipality(request.municipality());
 		crop.setSownDate(request.sownDate());
-		return toResponse(cropRepository.save(crop));
+		log.info("update_crop cropId={} profileId={}", cropId, profileId);
+		return CropResponse.from(cropRepository.save(crop));
 	}
 
-	/**
-	 * Elimina un cultivo verificando propiedad.
-	 */
+	// Elimina un cultivo verificando propiedad
 	@Transactional
 	public void deleteCrop(UUID cropId, UUID profileId) {
 		Crop crop = findCropAndValidateOwnership(cropId, profileId);
 		cropRepository.delete(crop);
+		log.info("delete_crop cropId={} profileId={}", cropId, profileId);
 	}
 
-	/**
-	 * Método interno reutilizable: busca un cultivo y valida que
-	 * pertenece al usuario autenticado. Usado por CropEventService
-	 * y RecommendationService.
-	 */
+	// Busca un cultivo y valida que pertenece al usuario (usado por CropEventService y RecommendationService)
 	public Crop findCropAndValidateOwnership(UUID cropId, UUID profileId) {
 		Crop crop = cropRepository.findById(cropId)
 				.orElseThrow(() -> new ResourceNotFoundException("Cultivo", cropId));
@@ -96,17 +91,5 @@ public class CropService {
 			throw new UnauthorizedCropAccessException(cropId, profileId);
 		}
 		return crop;
-	}
-
-	private CropResponse toResponse(Crop crop) {
-		return new CropResponse(
-				crop.getId(),
-				crop.getCropType(),
-				crop.getAreaHectares(),
-				crop.getMunicipality(),
-				crop.getSownDate(),
-				crop.getSyncStatus(),
-				crop.getCreatedAt()
-		);
 	}
 }
