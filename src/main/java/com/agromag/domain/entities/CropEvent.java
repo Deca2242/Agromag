@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Evento registrado sobre un cultivo (riego, fertilizaci\u00f3n, observaci\u00f3n, etc.)
 @Entity
 @Table(name = "crop_events")
 @Getter

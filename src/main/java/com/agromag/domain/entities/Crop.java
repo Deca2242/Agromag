@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+// Cultivo registrado por un productor
 @Entity
 @Table(name = "crops")
 @Getter
@@ -54,10 +55,10 @@ public class Crop {
 	@Column(name = "updated_at")
 	private LocalDateTime updatedAt;
 
-	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL, orphanRemoval = false)
+	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<CropEvent> events = new ArrayList<>();
 
-	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL, orphanRemoval = false)
+	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<Recommendation> recommendations = new ArrayList<>();
 
 	@PrePersist
