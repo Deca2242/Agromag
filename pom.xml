@@ -92,7 +92,7 @@
 		</dependency>
 		<dependency>
 			<groupId>me.paulschwarz</groupId>
-			<artifactId>spring-dotenv</artifactId>
+			<artifactId>springboot4-dotenv</artifactId>
 			<optional>true</optional>
 		</dependency>
 		<dependency>
