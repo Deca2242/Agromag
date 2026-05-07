@@ -7,6 +7,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
+// Seguridad: JWT stateless + roles desde app_metadata de Supabase
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
@@ -25,6 +26,7 @@ public class SecurityConfig {
 				session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/api/auth/**").permitAll()
+				.requestMatchers("/error").permitAll()
 				.requestMatchers("/api/adr/**").hasRole("ADR_TECHNICIAN")
 				.requestMatchers("/api/**").authenticated()
 				.anyRequest().denyAll()
@@ -36,3 +38,4 @@ public class SecurityConfig {
 		return http.build();
 	}
 }
+

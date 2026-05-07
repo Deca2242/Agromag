@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Recomendaci\u00f3n generada por el sistema (riego, fertilizaci\u00f3n, fitosanitaria)
 @Entity
 @Table(name = "recommendations")
 @Getter

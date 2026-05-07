@@ -1,6 +1,7 @@
 package com.agromag.domain.entities;
 
 import com.agromag.domain.enums.CropType;
+import com.agromag.domain.enums.Municipality;
 import com.agromag.domain.enums.SyncStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+// Cultivo registrado por un productor
 @Entity
 @Table(name = "crops")
 @Getter
@@ -36,8 +38,9 @@ public class Crop {
 	@Column(name = "area_hectares")
 	private BigDecimal areaHectares;
 
+	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
-	private String municipality;
+	private Municipality municipality;
 
 	@Column(name = "sown_date", nullable = false)
 	private LocalDate sownDate;
@@ -52,10 +55,10 @@ public class Crop {
 	@Column(name = "updated_at")
 	private LocalDateTime updatedAt;
 
-	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL, orphanRemoval = false)
+	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<CropEvent> events = new ArrayList<>();
 
-	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL, orphanRemoval = false)
+	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<Recommendation> recommendations = new ArrayList<>();
 
 	@PrePersist
