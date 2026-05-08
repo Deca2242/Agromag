@@ -8,7 +8,6 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-// Par\u00e1metros agron\u00f3micos de referencia para cada tipo de cultivo
 @Entity
 @Table(name = "crop_parameters")
 @Getter

@@ -12,7 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-// Recomendaci\u00f3n generada por el sistema (riego, fertilizaci\u00f3n, fitosanitaria)
+import org.hibernate.annotations.CreationTimestamp;
+
 @Entity
 @Table(name = "recommendations")
 @Getter
@@ -45,6 +46,7 @@ public class Recommendation {
 
 	private BigDecimal humidity;
 
+	@CreationTimestamp
 	@Column(name = "generated_at", nullable = false)
 	private LocalDateTime generatedAt;
 
@@ -54,9 +56,6 @@ public class Recommendation {
 
 	@PrePersist
 	void prePersist() {
-		if (generatedAt == null) {
-			generatedAt = LocalDateTime.now();
-		}
 		if (syncStatus == null) {
 			syncStatus = SyncStatus.PENDING;
 		}

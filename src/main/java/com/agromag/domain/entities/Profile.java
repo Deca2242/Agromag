@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 // Perfil de aplicación enlazado al usuario de Supabase Auth (id = claim "sub" del JWT)
 @Entity
 @Table(name = "profiles")
@@ -38,6 +40,7 @@ public class Profile {
 	@Column(nullable = false)
 	private Municipality municipality;
 
+	@CreationTimestamp
 	@Column(name = "created_at", updatable = false)
 	private LocalDateTime createdAt;
 
@@ -45,10 +48,4 @@ public class Profile {
 	@OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = false)
 	private List<Crop> crops = new ArrayList<>();
 
-	@PrePersist
-	void prePersist() {
-		if (createdAt == null) {
-			createdAt = LocalDateTime.now();
-		}
-	}
 }

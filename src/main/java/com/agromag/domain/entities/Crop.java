@@ -15,6 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 // Cultivo registrado por un productor
 @Entity
 @Table(name = "crops")
@@ -49,9 +52,11 @@ public class Crop {
 	@Column(name = "sync_status")
 	private SyncStatus syncStatus = SyncStatus.PENDING;
 
+	@CreationTimestamp
 	@Column(name = "created_at", updatable = false)
 	private LocalDateTime createdAt;
 
+	@UpdateTimestamp
 	@Column(name = "updated_at")
 	private LocalDateTime updatedAt;
 
@@ -63,20 +68,10 @@ public class Crop {
 
 	@PrePersist
 	void prePersist() {
-		LocalDateTime now = LocalDateTime.now();
-		if (createdAt == null) {
-			createdAt = now;
-		}
-		if (updatedAt == null) {
-			updatedAt = now;
-		}
 		if (syncStatus == null) {
 			syncStatus = SyncStatus.PENDING;
 		}
 	}
 
-	@PreUpdate
-	void preUpdate() {
-		updatedAt = LocalDateTime.now();
-	}
+
 }
