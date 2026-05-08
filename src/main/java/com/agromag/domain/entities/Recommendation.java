@@ -1,5 +1,6 @@
 package com.agromag.domain.entities;
 
+import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RecommendationType;
 import com.agromag.domain.enums.RiskLevel;
 import com.agromag.domain.enums.SyncStatus;
@@ -41,6 +42,10 @@ public class Recommendation {
 	private String message;
 
 	private Boolean followed;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = true)
+	private RecommendationSource source;
 
 	private BigDecimal temperature;
 

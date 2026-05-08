@@ -3,6 +3,7 @@ package com.agromag.controller;
 import com.agromag.dto.request.RecommendationDecisionRequest;
 import com.agromag.dto.response.FertilizerRecommendationResponse;
 import com.agromag.dto.response.IrrigationRecommendationResponse;
+import com.agromag.dto.response.PhytosanitaryRecommendationResponse;
 import com.agromag.dto.response.RecommendationResponse;
 import com.agromag.service.RecommendationService;
 import com.agromag.util.SecurityUtils;
@@ -49,6 +50,15 @@ public class RecommendationController {
 			@PathVariable UUID cropId) {
 		UUID userId = SecurityUtils.getCurrentUserId(principal);
 		FertilizerRecommendationResponse response = recommendationService.generateFertilizer(cropId, userId);
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	}
+
+	@PostMapping("/crops/{cropId}/recommendations/phytosanitary")
+	public ResponseEntity<PhytosanitaryRecommendationResponse> generatePhytosanitary(
+			Principal principal,
+			@PathVariable UUID cropId) {
+		UUID userId = SecurityUtils.getCurrentUserId(principal);
+		PhytosanitaryRecommendationResponse response = recommendationService.generatePhytosanitary(cropId, userId);
 		return ResponseEntity.status(HttpStatus.CREATED).body(response);
 	}
 

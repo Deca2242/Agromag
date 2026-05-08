@@ -1,5 +1,6 @@
 package com.agromag.dto.response;
 
+import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RiskLevel;
 
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ public record IrrigationRecommendationResponse(
 		RiskLevel level,
 		String message,
 		BigDecimal temperature,
-		LocalDateTime generatedAt
+		LocalDateTime generatedAt,
+		RecommendationSource source
 ) {
 }

@@ -3,19 +3,19 @@ package com.agromag.dto.response;
 import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RiskLevel;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-// Respuesta de recomendación de fertilización (IA con fallback a reglas)
-public record FertilizerRecommendationResponse(
+// Respuesta de alerta fitosanitaria — incluye plagas sospechosas y acción preventiva (RF-07, RF-08)
+public record PhytosanitaryRecommendationResponse(
 		UUID id,
 		UUID cropId,
-		String cropStage,
-		Integer weeksSinceSowing,
-		String recommendedNutrient,
-		String recommendedDose,
 		RiskLevel level,
 		String message,
+		String suspectedPests,
+		BigDecimal temperature,
+		BigDecimal humidity,
 		LocalDateTime generatedAt,
 		RecommendationSource source
 ) {

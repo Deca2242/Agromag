@@ -1,6 +1,7 @@
 package com.agromag.dto.response;
 
 import com.agromag.domain.entities.Recommendation;
+import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RecommendationType;
 import com.agromag.domain.enums.RiskLevel;
 
@@ -17,7 +18,8 @@ public record RecommendationResponse(
 		Boolean followed,
 		LocalDateTime generatedAt,
 		BigDecimal temperature,
-		BigDecimal humidity
+		BigDecimal humidity,
+		RecommendationSource source
 ) {
 	public static RecommendationResponse from(Recommendation rec) {
 		return new RecommendationResponse(
@@ -28,7 +30,8 @@ public record RecommendationResponse(
 				rec.getFollowed(),
 				rec.getGeneratedAt(),
 				rec.getTemperature(),
-				rec.getHumidity()
+				rec.getHumidity(),
+				rec.getSource()
 		);
 	}
 }
