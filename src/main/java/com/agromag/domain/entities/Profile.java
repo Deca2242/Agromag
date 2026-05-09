@@ -45,6 +45,9 @@ public class Profile {
 	@OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = false)
 	private List<Crop> crops = new ArrayList<>();
 
+	@OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
+	private List<ChatSession> chatSessions = new ArrayList<>();
+
 	@PrePersist
 	void prePersist() {
 		if (createdAt == null) {
