@@ -61,6 +61,9 @@ public class Crop {
 	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<Recommendation> recommendations = new ArrayList<>();
 
+	@OneToOne(mappedBy = "crop", cascade = CascadeType.ALL, orphanRemoval = true)
+	private CropTechnicalData technicalData;
+
 	@PrePersist
 	void prePersist() {
 		LocalDateTime now = LocalDateTime.now();
