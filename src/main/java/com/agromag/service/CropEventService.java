@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+// Lógica de negocio para eventos de cultivo con validación de propiedad
 @Service
 public class CropEventService {
 
@@ -44,9 +45,9 @@ public class CropEventService {
 		return CropEventResponse.from(cropEventRepository.save(event));
 	}
 
-	// Versión sin validación de path (usada por SyncService)
+	// Versión sin validación de path — usada por SyncService para procesar el lote offline
 	@Transactional
-	public CropEventResponse createEvent(UUID profileId, CropEventRequest request) {
+	public CropEventResponse createEventFromSync(UUID profileId, CropEventRequest request) {
 		Crop crop = cropService.findCropAndValidateOwnership(request.cropId(), profileId);
 		CropEvent event = buildCropEvent(crop, request);
 
@@ -77,10 +78,9 @@ public class CropEventService {
 	public CropEventResponse updateEvent(UUID eventId, UUID profileId, CropEventRequest request) {
 		CropEvent event = findEventOrThrow(eventId);
 
-		// Validar propiedad del cultivo actual
 		cropService.findCropAndValidateOwnership(event.getCrop().getId(), profileId);
 
-		// Si se mueve a otro cultivo, validar que el nuevo también le pertenece
+		// Si el evento se mueve a otro cultivo, valida que el nuevo también pertenece al usuario
 		if (!event.getCrop().getId().equals(request.cropId())) {
 			Crop newCrop = cropService.findCropAndValidateOwnership(request.cropId(), profileId);
 			event.setCrop(newCrop);
@@ -107,9 +107,7 @@ public class CropEventService {
 		log.info("delete_event eventId={}", eventId);
 	}
 
-	// --- Métodos privados reutilizables ---
-
-	// Construye un CropEvent a partir del request — elimina duplicación entre los dos createEvent
+	// Construye un CropEvent desde el request — elimina duplicación entre los dos createEvent
 	private CropEvent buildCropEvent(Crop crop, CropEventRequest request) {
 		CropEvent event = new CropEvent();
 		event.setId(request.id());

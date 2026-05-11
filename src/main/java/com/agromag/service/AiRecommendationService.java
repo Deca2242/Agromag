@@ -4,6 +4,7 @@ import com.agromag.domain.entities.Crop;
 import com.agromag.domain.entities.CropParameter;
 import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RiskLevel;
+import com.agromag.domain.model.ClimateData;
 import com.agromag.dto.response.FertilizerRecommendationResponse;
 import com.agromag.dto.response.IrrigationRecommendationResponse;
 import com.agromag.dto.response.PhytosanitaryRecommendationResponse;
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-/** Delegates recommendation generation to the AI model (Spring AI / OpenRouter). */
+// Delega la generación de recomendaciones al modelo de IA (Spring AI / OpenRouter)
 @Service
 public class AiRecommendationService {
 
@@ -33,7 +34,6 @@ public class AiRecommendationService {
 		this.chatClient = chatClientBuilder.build();
 		this.objectMapper = objectMapper;
 	}
-
 
 	public IrrigationRecommendationResponse generateIrrigationRecommendation(
 			Crop crop, CropParameter params, ClimateData climate) {
@@ -58,9 +58,8 @@ public class AiRecommendationService {
 					LocalDateTime.now(),
 					RecommendationSource.AI
 			);
-		} catch (AiServiceException e) {
-			throw e;
 		} catch (Exception e) {
+			if (e instanceof AiServiceException ase) throw ase;
 			log.error("ai_irrigation_error cropId={}", crop.getId(), e);
 			throw new AiServiceException("Error al generar recomendación de riego con IA", e);
 		}
@@ -97,14 +96,12 @@ public class AiRecommendationService {
 					LocalDateTime.now(),
 					RecommendationSource.AI
 			);
-		} catch (AiServiceException e) {
-			throw e;
 		} catch (Exception e) {
+			if (e instanceof AiServiceException ase) throw ase;
 			log.error("ai_fertilizer_error cropId={}", crop.getId(), e);
 			throw new AiServiceException("Error al generar recomendación de fertilización con IA", e);
 		}
 	}
-
 
 	public PhytosanitaryRecommendationResponse generatePhytosanitaryRecommendation(
 			Crop crop, CropParameter params, ClimateData climate, RiskLevel ruleLevel) {
@@ -120,6 +117,7 @@ public class AiRecommendationService {
 			String preventiveAction = safeText(json, "preventiveAction");
 			String aiMessage = safeText(json, "message");
 
+			// El mensaje final combina el diagnóstico de la IA con la acción preventiva recomendada
 			String fullMessage = aiMessage + " Acción: " + preventiveAction;
 
 			log.info("ai_phytosanitary_response cropId={} level={} pests={}", crop.getId(), level, suspectedPests);
@@ -135,14 +133,14 @@ public class AiRecommendationService {
 					LocalDateTime.now(),
 					RecommendationSource.AI
 			);
-		} catch (AiServiceException e) {
-			throw e;
 		} catch (Exception e) {
+			if (e instanceof AiServiceException ase) throw ase;
 			log.error("ai_phytosanitary_error cropId={}", crop.getId(), e);
 			throw new AiServiceException("Error al generar alerta fitosanitaria con IA", e);
 		}
 	}
 
+	// Llama al modelo de IA y limpia los bloques de código Markdown de la respuesta
 	private String callAi(String prompt) {
 		String response = chatClient.prompt()
 				.user(prompt)
@@ -154,6 +152,7 @@ public class AiRecommendationService {
 		return response.replaceAll("```json", "").replaceAll("```", "").trim();
 	}
 
+	// Parsea el nivel de riesgo del JSON; si la IA devuelve un valor desconocido, usa MEDIUM
 	private RiskLevel parseLevel(JsonNode json, String field, String cropId) {
 		String text = safeText(json, field);
 		try {
@@ -164,6 +163,7 @@ public class AiRecommendationService {
 		}
 	}
 
+	// Extrae texto de un campo JSON de forma segura — devuelve "No disponible" si el campo falta
 	private String safeText(JsonNode json, String field) {
 		if (json == null || !json.has(field) || json.get(field).isNull()) {
 			log.warn("ai_missing_field field={}", field);
@@ -171,7 +171,6 @@ public class AiRecommendationService {
 		}
 		return json.get(field).asText();
 	}
-
 
 	private String buildIrrigationPrompt(Crop crop, CropParameter params, ClimateData climate) {
 		return """

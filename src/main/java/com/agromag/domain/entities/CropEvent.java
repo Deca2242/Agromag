@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Evento registrado dentro de un cultivo (riego, fertilización, observación, etc.)
 @Entity
 @Table(name = "crop_events")
 @Getter
@@ -43,11 +44,4 @@ public class CropEvent {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "sync_status")
 	private SyncStatus syncStatus = SyncStatus.PENDING;
-
-	@PrePersist
-	void prePersist() {
-		if (syncStatus == null) {
-			syncStatus = SyncStatus.PENDING;
-		}
-	}
 }

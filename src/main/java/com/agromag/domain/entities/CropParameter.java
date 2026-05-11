@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
+// Parámetros agronómicos de referencia para cada tipo de cultivo (temperatura, humedad, pH, etc.)
 @Entity
 @Table(name = "crop_parameters")
 @Getter
@@ -53,8 +54,9 @@ public class CropParameter {
 	@Column(name = "ec_max", nullable = false)
 	private BigDecimal ecMax;
 
+	// Unidad: ml/day o ml/week según el tipo de cultivo
 	@Column(name = "irrigation_needs", nullable = false)
-	private String irrigationNeeds; // ml/day or ml/week
+	private String irrigationNeeds;
 
 	@Column(name = "recommended_fertilizer", nullable = false)
 	private String recommendedFertilizer;

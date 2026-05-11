@@ -6,6 +6,7 @@ import java.util.UUID;
 public class UnauthorizedCropAccessException extends RuntimeException {
 
 	public UnauthorizedCropAccessException(UUID cropId, UUID profileId) {
-		super(String.format("El usuario %s no tiene acceso al cultivo %s", profileId, cropId));
+		// Mensaje genérico al cliente — los IDs se logean en el servidor para no filtrar información
+		super("No tiene acceso a este recurso");
 	}
 }

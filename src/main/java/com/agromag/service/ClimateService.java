@@ -1,6 +1,7 @@
 package com.agromag.service;
 
 import com.agromag.domain.enums.Municipality;
+import com.agromag.domain.model.ClimateData;
 import com.agromag.exception.ClimateServiceException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,7 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 
-// Consulta la API de Open-Meteo para obtener datos climáticos actuales
+// Consulta la API de Open-Meteo para obtener datos climáticos actuales de un municipio
 @Service
 public class ClimateService {
 
@@ -25,10 +26,10 @@ public class ClimateService {
 		this.objectMapper = objectMapper;
 	}
 
-	// Obtiene temperatura y humedad actual del municipio usando coordenadas del enum
+	// Obtiene temperatura y humedad actual del municipio usando sus coordenadas geográficas
 	public ClimateData getCurrentClimate(Municipality municipality) {
 		try {
-			log.info("fetch_climate municipality={}", municipality.getDisplayName());
+			log.debug("fetch_climate municipality={}", municipality.getDisplayName());
 
 			String responseString = openMeteoWebClient.get()
 					.uri(uriBuilder -> uriBuilder
@@ -58,9 +59,8 @@ public class ClimateService {
 			log.info("climate_result municipality={} temp={} hum={}", municipality.getDisplayName(), temperature, humidity);
 			return new ClimateData(temperature, humidity);
 
-		} catch (ClimateServiceException e) {
-			throw e;
 		} catch (Exception e) {
+			if (e instanceof ClimateServiceException cse) throw cse;
 			throw new ClimateServiceException(
 					"Error al consultar Open-Meteo para " + municipality.getDisplayName(), e);
 		}

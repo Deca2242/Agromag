@@ -47,6 +47,7 @@ public class SyncService {
 		this.recommendationService = recommendationService;
 	}
 
+	// Todo-o-nada: si un item falla, se revierte todo el batch (el cliente reintenta completo)
 	@Transactional
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
 		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",
@@ -85,7 +86,7 @@ public class SyncService {
 
 			for (CropEventRequest eventReq : request.events()) {
 				if (!existingEventIds.contains(eventReq.id())) {
-					CropEventResponse created = cropEventService.createEvent(profileId, eventReq);
+					CropEventResponse created = cropEventService.createEventFromSync(profileId, eventReq);
 					syncedEvents.add(created);
 				}
 			}

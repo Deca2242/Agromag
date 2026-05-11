@@ -19,4 +19,10 @@ public record PhytosanitaryRecommendationResponse(
 		LocalDateTime generatedAt,
 		RecommendationSource source
 ) {
+	// Crea una copia con nivel y fuente modificados — evita reconstrucción manual del record
+	public PhytosanitaryRecommendationResponse withLevelAndSource(RiskLevel newLevel, RecommendationSource newSource) {
+		return new PhytosanitaryRecommendationResponse(
+				id, cropId, newLevel, message, suspectedPests,
+				temperature, humidity, generatedAt, newSource);
+	}
 }
