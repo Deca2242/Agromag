@@ -173,7 +173,6 @@ public class RecommendationService {
 	}
 
 	// Motor de reglas para riego — evalúa umbrales FAO simplificados
-	// Acceso package-private para permitir pruebas unitarias directas
 	RuleResult computeIrrigationByRules(ClimateData climate, CropParameter params, Crop crop) {
 		BigDecimal temp = climate.temperature();
 		BigDecimal hum = climate.humidity();
@@ -206,7 +205,6 @@ public class RecommendationService {
 	}
 
 	// Motor de reglas fitosanitario — temp > 28°C Y humedad > 80% → ALTO; una condición → MEDIO; ninguna → BAJO
-	// Acceso package-private para permitir pruebas unitarias directas
 	PhytosanitaryRuleResult computePhytosanitaryByRules(ClimateData climate, Crop crop) {
 		BigDecimal temp = climate.temperature();
 		BigDecimal hum = climate.humidity();
