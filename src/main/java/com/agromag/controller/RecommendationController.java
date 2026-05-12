@@ -13,12 +13,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
-import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Recomendaciones", description = "Generación y gestión de recomendaciones agronómicas (riego, fertilización, fitosanitarios)")
@@ -38,11 +41,28 @@ public class RecommendationController {
 		@ApiResponse(responseCode = "404", description = "Cultivo no encontrado")
 	})
 	@GetMapping("/crops/{cropId}/recommendations")
-	public ResponseEntity<List<RecommendationResponse>> getRecommendations(
+	public ResponseEntity<Page<RecommendationResponse>> getRecommendations(
 			Principal principal,
-			@Parameter(description = "ID del cultivo") @PathVariable UUID cropId) {
+			@Parameter(description = "ID del cultivo") @PathVariable UUID cropId,
+			@Parameter(description = "Filtro: any, pending, decided") @RequestParam(defaultValue = "any") String followed,
+			@PageableDefault(size = 10, sort = "generatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
 		UUID userId = SecurityUtils.getCurrentUserId(principal);
-		return ResponseEntity.ok(recommendationService.getRecommendationsByCrop(cropId, userId));
+		var filter = RecommendationService.RecommendationFollowedFilter.fromParam(followed);
+		return ResponseEntity.ok(recommendationService.getRecommendationsPage(cropId, userId, filter, pageable));
+	}
+
+	@Operation(summary = "Anular decisión", description = "Deja la recomendación otra vez sin decisión (followed=null)")
+	@ApiResponses({
+			@ApiResponse(responseCode = "204", description = "Decisión anulada"),
+			@ApiResponse(responseCode = "404", description = "Recomendación no encontrada")
+	})
+	@DeleteMapping("/recommendations/{recommendationId}/decision")
+	public ResponseEntity<Void> resetRecommendationDecision(
+			Principal principal,
+			@Parameter(description = "ID de la recomendación") @PathVariable UUID recommendationId) {
+		UUID userId = SecurityUtils.getCurrentUserId(principal);
+		recommendationService.resetDecision(userId, recommendationId);
+		return ResponseEntity.noContent().build();
 	}
 
 	@Operation(

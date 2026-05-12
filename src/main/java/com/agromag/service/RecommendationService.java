@@ -20,6 +20,8 @@ import com.agromag.repository.CropParameterRepository;
 import com.agromag.repository.RecommendationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,21 @@ import java.util.UUID;
 // Orquesta la generación de recomendaciones (riego, fertilización, fitosanitaria)
 @Service
 public class RecommendationService {
+
+	public enum RecommendationFollowedFilter {
+		ANY, PENDING, DECIDED;
+
+		public static RecommendationFollowedFilter fromParam(String raw) {
+			if (raw == null || raw.isBlank()) {
+				return ANY;
+			}
+			return switch (raw.trim().toLowerCase()) {
+				case "pending" -> PENDING;
+				case "decided" -> DECIDED;
+				default -> ANY;
+			};
+		}
+	}
 
 	private static final Logger log = LoggerFactory.getLogger(RecommendationService.class);
 
@@ -58,11 +75,17 @@ public class RecommendationService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<RecommendationResponse> getRecommendationsByCrop(UUID cropId, UUID profileId) {
+	public Page<RecommendationResponse> getRecommendationsPage(UUID cropId, UUID profileId,
+			RecommendationFollowedFilter filter, Pageable pageable) {
 		cropService.findCropAndValidateOwnership(cropId, profileId);
-		return recommendationRepository.findByCrop_Id(cropId).stream()
-				.map(RecommendationResponse::from)
-				.toList();
+		Page<Recommendation> page = switch (filter) {
+			case PENDING -> recommendationRepository
+					.findByCrop_IdAndFollowedIsNullOrderByGeneratedAtDesc(cropId, pageable);
+			case DECIDED -> recommendationRepository
+					.findByCrop_IdAndFollowedIsNotNullOrderByGeneratedAtDesc(cropId, pageable);
+			case ANY -> recommendationRepository.findByCrop_IdOrderByGeneratedAtDesc(cropId, pageable);
+		};
+		return page.map(RecommendationResponse::from);
 	}
 
 	// Registra si el productor siguió una recomendación (CU-09)
@@ -74,6 +97,16 @@ public class RecommendationService {
 		rec.setFollowed(request.followed());
 		recommendationRepository.save(rec);
 		log.info("mark_decision recommendationId={} followed={}", request.recommendationId(), request.followed());
+	}
+
+	@Transactional
+	public void resetDecision(UUID profileId, UUID recommendationId) {
+		Recommendation rec = recommendationRepository.findById(recommendationId)
+				.orElseThrow(() -> new ResourceNotFoundException("Recomendación", recommendationId));
+		cropService.findCropAndValidateOwnership(rec.getCrop().getId(), profileId);
+		rec.setFollowed(null);
+		recommendationRepository.save(rec);
+		log.info("reset_decision recommendationId={}", recommendationId);
 	}
 
 	// Genera recomendación de riego (RF-04) — IA primero, reglas como respaldo
@@ -103,6 +136,7 @@ public class RecommendationService {
 					RecommendationSource.RULE);
 		}
 
+		deletePendingRecommendations(cropId, RecommendationType.IRRIGATION);
 		persist(new PersistRequest(response.id(), crop, RecommendationType.IRRIGATION, response.level(),
 				response.message(), climate.temperature(), climate.humidity(), response.source(),
 				response.generatedAt()));
@@ -130,6 +164,7 @@ public class RecommendationService {
 					now, RecommendationSource.RULE);
 		}
 
+		deletePendingRecommendations(cropId, RecommendationType.FERTILIZER);
 		persist(new PersistRequest(response.id(), crop, RecommendationType.FERTILIZER, response.level(),
 				response.message(), climate.temperature(), climate.humidity(), response.source(),
 				response.generatedAt()));
@@ -165,6 +200,7 @@ public class RecommendationService {
 					now, RecommendationSource.RULE);
 		}
 
+		deletePendingRecommendations(cropId, RecommendationType.PHYTOSANITARY);
 		persist(new PersistRequest(response.id(), crop, RecommendationType.PHYTOSANITARY, response.level(),
 				response.message(), climate.temperature(), climate.humidity(), response.source(),
 				response.generatedAt()));
@@ -281,6 +317,10 @@ public class RecommendationService {
 	private CropParameter requireParams(Crop crop) {
 		return cropParameterRepository.findByCropType(crop.getCropType())
 				.orElseThrow(() -> new ResourceNotFoundException("Parámetros del cultivo", crop.getCropType()));
+	}
+
+	private void deletePendingRecommendations(UUID cropId, RecommendationType type) {
+		recommendationRepository.deleteByCrop_IdAndTypeAndFollowedIsNull(cropId, type);
 	}
 
 	// Persiste la recomendación generada en la base de datos
