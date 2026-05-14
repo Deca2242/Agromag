@@ -2,6 +2,7 @@ package com.agromag.domain.enums;
 
 import lombok.Getter;
 
+// Municipios del Magdalena soportados — incluyen coordenadas para consultar clima en Open-Meteo
 @Getter
 public enum Municipality {
 	SANTA_MARTA("Santa Marta", 11.2408, -74.1992),

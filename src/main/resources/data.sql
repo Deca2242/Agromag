@@ -1,3 +1,6 @@
+-- Migration: add source column to recommendations (idempotent — run once in Supabase if not already present)
+ALTER TABLE recommendations ADD COLUMN IF NOT EXISTS source VARCHAR(8) DEFAULT 'RULE';
+
 INSERT INTO crop_parameters (crop_type, suggested_spacing, growth_cycle_days, optimal_temp_min, optimal_temp_max, humidity_min, humidity_max, ph_min, ph_max, ec_min, ec_max, irrigation_needs, recommended_fertilizer, planting_depth_cm) 
 VALUES 
 ('BANANO', '2.5m x 2.5m', 270, 26.0, 30.0, 75.0, 85.0, 5.5, 7.0, 1.0, 2.0, '20-25 mm/day', 'NPK 15-5-20', 30.0),

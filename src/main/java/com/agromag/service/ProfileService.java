@@ -29,7 +29,7 @@ public class ProfileService {
 	@Transactional
 	public ProfileResponse getOrCreateProfile(UUID userId, String email) {
 		Profile profile = profileRepository.findById(userId).orElseGet(() -> {
-			// No logueamos el email por ser dato personal (PII)
+			// No logueamos el email por ser dato personal 
 			log.info("auto_register_profile userId={}", userId);
 			Profile newProfile = new Profile();
 			newProfile.setId(userId);
@@ -43,8 +43,9 @@ public class ProfileService {
 	}
 
 	// Obtiene un perfil existente o lanza 404
+	// Acceso package-private: devuelve la entidad JPA para uso interno entre servicios
 	@Transactional(readOnly = true)
-	public Profile getProfileById(UUID userId) {
+	Profile getProfileById(UUID userId) {
 		return profileRepository.findById(userId)
 				.orElseThrow(() -> new ResourceNotFoundException("Perfil", userId));
 	}

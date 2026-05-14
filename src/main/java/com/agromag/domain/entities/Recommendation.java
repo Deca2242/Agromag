@@ -1,5 +1,6 @@
 package com.agromag.domain.entities;
 
+import com.agromag.domain.enums.RecommendationSource;
 import com.agromag.domain.enums.RecommendationType;
 import com.agromag.domain.enums.RiskLevel;
 import com.agromag.domain.enums.SyncStatus;
@@ -12,8 +13,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import org.hibernate.annotations.CreationTimestamp;
-
+// Recomendación generada por IA o por reglas para un cultivo específico
 @Entity
 @Table(name = "recommendations")
 @Getter
@@ -40,24 +40,22 @@ public class Recommendation {
 	@Column(nullable = false, length = 2000)
 	private String message;
 
+	// null = el productor aún no tomó una decisión sobre esta recomendación
 	private Boolean followed;
+
+	@Enumerated(EnumType.STRING)
+	@Column
+	private RecommendationSource source;
 
 	private BigDecimal temperature;
 
 	private BigDecimal humidity;
 
-	@CreationTimestamp
+	// Timestamp explícito — controlado por RecommendationService, no por Hibernate
 	@Column(name = "generated_at", nullable = false)
 	private LocalDateTime generatedAt;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "sync_status")
 	private SyncStatus syncStatus = SyncStatus.PENDING;
-
-	@PrePersist
-	void prePersist() {
-		if (syncStatus == null) {
-			syncStatus = SyncStatus.PENDING;
-		}
-	}
 }

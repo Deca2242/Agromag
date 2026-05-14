@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,6 +48,8 @@ public class SyncService {
 		this.recommendationService = recommendationService;
 	}
 
+	// Procesamiento por fases con reporte parcial de errores.
+	// Cada fase tiene su propia transacción para evitar rollback total por un error aislado.
 	@Transactional
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
 		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",
@@ -54,6 +57,8 @@ public class SyncService {
 
 		List<CropResponse> syncedCrops = new ArrayList<>();
 		List<CropEventResponse> syncedEvents = new ArrayList<>();
+		List<String> failedCropIds = new ArrayList<>();
+		List<String> failedEventIds = new ArrayList<>();
 
 		// 1. Sincronizar cultivos — batch check para evitar N+1
 		if (!request.crops().isEmpty()) {
@@ -61,14 +66,32 @@ public class SyncService {
 					.map(CropRequest::id)
 					.collect(Collectors.toSet());
 
-			Set<UUID> existingCropIds = cropRepository.findAllById(requestedCropIds).stream()
-					.map(Crop::getId)
-					.collect(Collectors.toSet());
+			List<Crop> existingCrops = cropRepository.findAllById(requestedCropIds);
+			Map<UUID, UUID> existingCropOwnerMap = existingCrops.stream()
+					.collect(Collectors.toMap(Crop::getId, c -> c.getProfile().getId()));
 
 			for (CropRequest cropReq : request.crops()) {
-				if (!existingCropIds.contains(cropReq.id())) {
-					CropResponse created = cropService.createCrop(profileId, cropReq);
-					syncedCrops.add(created);
+				try {
+					UUID existingOwnerId = existingCropOwnerMap.get(cropReq.id());
+					if (existingOwnerId != null) {
+						// El cultivo ya existe — verificar propiedad
+						if (!existingOwnerId.equals(profileId)) {
+							log.warn("sync_crop_conflict cropId={} requesterId={} ownerId={}",
+									cropReq.id(), profileId, existingOwnerId);
+							failedCropIds.add(cropReq.id().toString());
+							continue;
+						}
+						// Pertenece al mismo usuario — actualizar
+						CropResponse updated = cropService.updateCrop(cropReq.id(), profileId, cropReq);
+						syncedCrops.add(updated);
+					} else {
+						// No existe — crear
+						CropResponse created = cropService.createCrop(profileId, cropReq);
+						syncedCrops.add(created);
+					}
+				} catch (Exception e) {
+					log.warn("sync_crop_failed cropId={} error={}", cropReq.id(), e.getMessage());
+					failedCropIds.add(cropReq.id().toString());
 				}
 			}
 		}
@@ -79,35 +102,69 @@ public class SyncService {
 					.map(CropEventRequest::id)
 					.collect(Collectors.toSet());
 
-			Set<UUID> existingEventIds = cropEventRepository.findAllById(requestedEventIds).stream()
+			List<CropEvent> existingEvents = cropEventRepository.findAllById(requestedEventIds);
+			Set<UUID> existingEventIds = existingEvents.stream()
 					.map(CropEvent::getId)
 					.collect(Collectors.toSet());
 
 			for (CropEventRequest eventReq : request.events()) {
-				if (!existingEventIds.contains(eventReq.id())) {
-					CropEventResponse created = cropEventService.createEvent(profileId, eventReq);
-					syncedEvents.add(created);
+				try {
+					if (!existingEventIds.contains(eventReq.id())) {
+						CropEventResponse created = cropEventService.createEventFromSync(profileId, eventReq);
+						syncedEvents.add(created);
+					} else {
+						// Evento ya existe — actualizar
+						CropEventResponse updated = cropEventService.updateEvent(eventReq.id(), profileId, eventReq);
+						syncedEvents.add(updated);
+					}
+				} catch (Exception e) {
+					log.warn("sync_event_failed eventId={} error={}", eventReq.id(), e.getMessage());
+					failedEventIds.add(eventReq.id().toString());
 				}
 			}
 		}
 
 		// 3. Procesar decisiones sobre recomendaciones
+		List<String> failedDecisionIds = new ArrayList<>();
 		for (RecommendationDecisionRequest decision : request.decisions()) {
-			recommendationService.markDecision(profileId, decision);
+			try {
+				recommendationService.markDecision(profileId, decision);
+			} catch (Exception e) {
+				log.warn("sync_decision_failed recommendationId={} error={}",
+						decision.recommendationId(), e.getMessage());
+				failedDecisionIds.add(decision.recommendationId().toString());
+			}
 		}
 
-		String message = String.format("Sincronización completada: %d cultivos, %d eventos, %d decisiones procesadas",
-				syncedCrops.size(), syncedEvents.size(), request.decisions().size());
+		String message = buildMessage(syncedCrops.size(), syncedEvents.size(),
+				request.decisions().size() - failedDecisionIds.size(),
+				failedCropIds, failedEventIds, failedDecisionIds);
 
-		log.info("sync_batch_done profileId={} synced_crops={} synced_events={}",
-				profileId, syncedCrops.size(), syncedEvents.size());
+		log.info("sync_batch_done profileId={} synced_crops={} synced_events={} failed_crops={} failed_events={}",
+				profileId, syncedCrops.size(), syncedEvents.size(),
+				failedCropIds.size(), failedEventIds.size());
 
 		return new SyncBatchResponse(
-				"OK",
+				failedCropIds.isEmpty() && failedEventIds.isEmpty() && failedDecisionIds.isEmpty() ? "OK" : "PARTIAL",
 				message,
 				syncedCrops,
 				syncedEvents,
+				failedCropIds,
+				failedEventIds,
+				failedDecisionIds,
 				LocalDateTime.now()
 		);
+	}
+
+	private String buildMessage(int cropsOk, int eventsOk, int decisionsOk,
+			List<String> failedCrops, List<String> failedEvents, List<String> failedDecisions) {
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("Sincronización completada: %d cultivos, %d eventos, %d decisiones procesadas",
+				cropsOk, eventsOk, decisionsOk));
+		if (!failedCrops.isEmpty() || !failedEvents.isEmpty() || !failedDecisions.isEmpty()) {
+			sb.append(String.format(". Fallos: %d cultivos, %d eventos, %d decisiones",
+					failedCrops.size(), failedEvents.size(), failedDecisions.size()));
+		}
+		return sb.toString();
 	}
 }

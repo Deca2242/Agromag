@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,7 +23,7 @@ public class GlobalExceptionHandler {
 	public record ErrorResponse(int status, String error, String message, LocalDateTime timestamp) {
 	}
 
-	// Respuesta específica para errores de validación
+	// Respuesta específica para errores de validación de DTOs
 	public record ValidationErrorResponse(int status, String error, Map<String, String> fieldErrors,
 			LocalDateTime timestamp) {
 	}
@@ -59,14 +60,13 @@ public class GlobalExceptionHandler {
 		return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
 	}
 
-	// Validación de DTOs — respuesta tipada e inmutable en vez de Map<String, Object>
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<ValidationErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
 		Map<String, String> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
 				.collect(Collectors.toMap(
-						error -> error.getField(),
+						FieldError::getField,
 						error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "inválido",
-						(first, second) -> first // si hay duplicados, quedarse con el primero
+						(first, second) -> first // si hay dos errores para el mismo campo, queda el primero
 				));
 
 		ValidationErrorResponse body = new ValidationErrorResponse(

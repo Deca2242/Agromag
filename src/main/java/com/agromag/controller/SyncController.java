@@ -4,6 +4,10 @@ import com.agromag.dto.request.SyncBatchRequest;
 import com.agromag.dto.response.SyncBatchResponse;
 import com.agromag.service.SyncService;
 import com.agromag.util.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.UUID;
 
-// Endpoint de sincronización batch (offline → servidor)
+@Tag(name = "Sincronización", description = "Sincronización batch de datos generados en modo offline")
 @RestController
 @RequestMapping("/api/sync")
 public class SyncController {
@@ -22,6 +26,16 @@ public class SyncController {
 		this.syncService = syncService;
 	}
 
+	@Operation(
+		summary = "Sincronizar lote offline",
+		description = "Recibe y procesa un lote de operaciones generadas mientras el dispositivo estaba sin conexión. "
+			+ "Retorna el resultado de cada operación procesada (exitosa o fallida)."
+	)
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "Lote procesado (puede contener errores parciales)"),
+		@ApiResponse(responseCode = "400", description = "Formato del lote inválido"),
+		@ApiResponse(responseCode = "401", description = "Token JWT inválido o ausente")
+	})
 	@PostMapping("/batch")
 	public ResponseEntity<SyncBatchResponse> syncBatch(
 			Principal principal,

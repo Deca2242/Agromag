@@ -48,6 +48,7 @@ public class Crop {
 	@Column(name = "sown_date", nullable = false)
 	private LocalDate sownDate;
 
+	// El valor por defecto PENDING se establece en la declaración del campo
 	@Enumerated(EnumType.STRING)
 	@Column(name = "sync_status")
 	private SyncStatus syncStatus = SyncStatus.PENDING;
@@ -65,13 +66,4 @@ public class Crop {
 
 	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<Recommendation> recommendations = new ArrayList<>();
-
-	@PrePersist
-	void prePersist() {
-		if (syncStatus == null) {
-			syncStatus = SyncStatus.PENDING;
-		}
-	}
-
-
 }

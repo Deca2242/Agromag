@@ -14,7 +14,7 @@ import java.util.UUID;
 
 import org.hibernate.annotations.CreationTimestamp;
 
-// Perfil de aplicación enlazado al usuario de Supabase Auth (id = claim "sub" del JWT)
+// Perfil de aplicación enlazado al usuario de Supabase Auth
 @Entity
 @Table(name = "profiles")
 @Getter
@@ -44,8 +44,6 @@ public class Profile {
 	@Column(name = "created_at", updatable = false)
 	private LocalDateTime createdAt;
 
-	// No necesita @JsonIgnore porque nunca exponemos la entidad directamente (usamos DTOs)
 	@OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = false)
 	private List<Crop> crops = new ArrayList<>();
-
 }

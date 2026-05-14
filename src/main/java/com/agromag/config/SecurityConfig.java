@@ -25,12 +25,20 @@ public class SecurityConfig {
 			.sessionManagement(session ->
 				session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/api/auth/**").permitAll()
-				.requestMatchers("/error").permitAll()
-				.requestMatchers("/api/adr/**").hasRole("ADR_TECHNICIAN")
-				.requestMatchers("/api/**").authenticated()
-				.anyRequest().denyAll()
-			)
+					.requestMatchers("/api/auth/**").permitAll()
+					.requestMatchers("/error").permitAll()
+					// Swagger UI y OpenAPI docs — solo accesibles en desarrollo
+					.requestMatchers(
+						"/swagger-ui.html",
+						"/swagger-ui/**",
+						"/v3/api-docs",
+						"/v3/api-docs/**",
+						"/v3/api-docs.yaml"
+					).permitAll()
+					.requestMatchers("/api/adr/**").hasRole("ADR_TECHNICIAN")
+					.requestMatchers("/api/**").authenticated()
+					.anyRequest().denyAll()
+				)
 			.oauth2ResourceServer(oauth2 -> oauth2
 				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
 			);
@@ -38,4 +46,3 @@ public class SecurityConfig {
 		return http.build();
 	}
 }
-
