@@ -53,6 +53,7 @@ public class AssistantService {
 	private static final int MAX_PENDING_RECOMMENDATIONS = 5;
 	private static final int MAX_RECENT_EVENTS = 8;
 	private static final int MAX_HISTORY_TURNS = 10;
+	private static final String ASSISTANT_MODEL_LABEL = "DeepSeek via OpenRouter";
 
 	private enum AssistantIntent {
 		CROPS,
@@ -145,7 +146,7 @@ public class AssistantService {
 		}
 
 		String reply = prompt.user(req.message()).call().content();
-		return new ChatResponse(reply != null ? reply : "", Instant.now(), suggestions);
+		return new ChatResponse(sanitizeAssistantReply(reply), Instant.now(), suggestions);
 	}
 
 	public void streamResponse(UUID profileId, String email, ChatRequest req, SseEmitter emitter) {
@@ -194,7 +195,7 @@ public class AssistantService {
 					}
 				}
 
-				String fullReply = prompt.user(req.message()).call().content();
+				String fullReply = sanitizeAssistantReply(prompt.user(req.message()).call().content());
 
 				if (!completed.get() && fullReply != null) {
 					emitter.send(SseEmitter.event().name("token").data(fullReply));
@@ -285,10 +286,14 @@ public class AssistantService {
 		String eventsBlock = buildRecentEventsBlock(ctx.events());
 
 		return """
-				Eres un asistente agrícola experto para productores del Magdalena, Colombia.
+				Tu identidad es AGROBOT, el asistente agrícola de Agromag para productores del Magdalena, Colombia.
+				Estás impulsado por %s. No te presentes como DeepSeek, OpenAI, OpenRouter ni como el modelo base.
+				Si el usuario pregunta qué eres o qué modelo usas, responde que eres AGROBOT, un asistente agrícola impulsado por %s.
 				El usuario es %s, del municipio %s.
 				Da respuestas concisas, prácticas y accionables, enfocadas en cultivos de la región
 				(banano, mango, yuca, plátano, maíz, palma). Responde siempre en español.
+				No uses Markdown. No uses **, __, títulos con #, tablas Markdown ni bloques de código salvo que el usuario lo pida.
+				Usa texto plano fácil de leer en móvil. Si necesitas listar puntos, usa guiones simples.
 
 				== RESUMEN DE CONTEXTO REAL DE LA APP ==
 				Cultivos detectados: %d
@@ -324,6 +329,8 @@ public class AssistantService {
 				Si el usuario pregunta sobre un cultivo específico, usa la información detallada de arriba.
 				Proporciona consejos prácticos basados en las condiciones climáticas actuales.
 				""".formatted(
+				ASSISTANT_MODEL_LABEL,
+				ASSISTANT_MODEL_LABEL,
 				fullName != null && !fullName.isBlank() ? fullName : "productor",
 				municipality.getDisplayName(),
 				ctx.crops().size(),
@@ -336,6 +343,16 @@ public class AssistantService {
 				recsBlock,
 				eventsBlock
 		);
+	}
+
+	private String sanitizeAssistantReply(String reply) {
+		if (reply == null) {
+			return "";
+		}
+		return reply
+				.replace("**", "")
+				.replace("__", "")
+				.trim();
 	}
 
 	static String buildCropsContextBlock(List<CropSummary> crops) {

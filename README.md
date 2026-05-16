@@ -31,7 +31,7 @@
 
 ✅ Registra **cultivos y eventos** (riego, fertilización, observaciones)  
 ✅ Genera **recomendaciones de riego** basadas en datos climáticos en tiempo real  
-✅ Utiliza **IA (OpenAI)** para generar recomendaciones de fertilización contextualizadas  
+✅ Utiliza **IA vía OpenRouter** para generar recomendaciones de fertilización contextualizadas  
 ✅ Consulta **datos climáticos** de Open-Meteo (temperatura, humedad)  
 ✅ Soporta **funcionamiento offline** con sincronización batch  
 ✅ Autentica usuarios con **JWT de Supabase** (OAuth2 Resource Server)  
@@ -70,7 +70,7 @@
 - Incluye sugerencias de cantidad de riego
 
 #### b) **Recomendaciones de Fertilización** (Impulsadas por IA)
-- Utiliza OpenAI (via OpenRouter) con modelo gpt-4o-mini
+- Utiliza DeepSeek vía OpenRouter con modelo deepseek/deepseek-v4-flash:free
 - Analiza etapa del cultivo (basada en semanas desde siembra)
 - Datos climáticos y parámetros agronómicos
 - Genera nutrientes específicos y dosis recomendadas
@@ -100,7 +100,7 @@
 | **Security** | Spring Security | OAuth2 | Control de acceso |
 | **Validación** | Jakarta Validation | v3.0 | Validación de datos |
 | **Cliente HTTP** | Spring WebFlux | (WebClient) | Llamadas a APIs externas |
-| **IA** | Spring AI | 2.0.0-M5 | Integración con OpenAI |
+| **IA** | Spring AI | 2.0.0-M5 | Integración con OpenRouter |
 | **Clima** | Open-Meteo API | v1 | Datos climáticos |
 | **Serialización** | Jackson | (spring-boot) | Parseador JSON |
 | **Logging** | SLF4J** | (spring-boot) | Rastreo de eventos |
@@ -148,7 +148,7 @@ La arquitectura sigue el patrón **Layered Architecture (n-capas)**:
 │          DATA LAYER (Database + APIs)                   │
 │  ├─ PostgreSQL (Supabase) - Datos persistentes        │
 │  ├─ Open-Meteo API - Datos climáticos                │
-│  ├─ OpenAI (OpenRouter) - Inteligencia artificial    │
+│  ├─ DeepSeek (OpenRouter) - Inteligencia artificial  │
 │  └─ Supabase Auth - Autenticación JWT               │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -723,7 +723,7 @@ SUPABASE_PROJECT_REF=your-project-ref
 SUPABASE_DB_USER=postgres
 SUPABASE_DB_PASSWORD=your-database-password
 
-# OpenAI / OpenRouter API
+# OpenRouter API
 OPENAI_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxx
 ```
 
@@ -797,7 +797,7 @@ openmeteo.url=https://api.open-meteo.com/v1/forecast
 # Spring AI - OpenRouter (proxy compatible con OpenAI)
 spring.ai.openai.api-key=${OPENAI_API_KEY}
 spring.ai.openai.base-url=https://openrouter.ai/api/v1
-spring.ai.openai.chat.options.model=openai/gpt-4o-mini
+spring.ai.openai.chat.options.model=deepseek/deepseek-v4-flash:free
 spring.ai.openai.chat.options.temperature=0.3
 
 # Seed data
@@ -934,7 +934,7 @@ RecommendationController.generateFertilizer(principal, cropId)
   │  │  │  └─ Crea prompt agronómico especializado
   │  │  │
   │  │  ├─ ChatClient.prompt().user(prompt).call().content()
-  │  │  │  └─ Envía a OpenRouter (OpenAI gpt-4o-mini)
+  │  │  │  └─ Envía a OpenRouter (DeepSeek)
   │  │  │
   │  │  ├─ Recibe JSON:
   │  │  │  {
