@@ -44,20 +44,8 @@ public class CropEvent {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "sync_status")
 	private SyncStatus syncStatus = SyncStatus.PENDING;
-<<<<<<< Updated upstream
-=======
 
-<<<<<<< Updated upstream
-	@PrePersist
-	void prePersist() {
-		if (syncStatus == null) {
-			syncStatus = SyncStatus.PENDING;
-		}
-	}
-=======
 	@Version
 	@Column(name = "version")
 	private Long version;
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 }

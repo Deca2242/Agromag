@@ -100,10 +100,10 @@ public class CropEventService {
 	// Elimina un evento tras verificar la propiedad del cultivo
 	@Transactional
 	public void deleteEvent(UUID eventId, UUID profileId) {
-		CropEvent event = findEventOrThrow(eventId);
-		cropService.findCropAndValidateOwnership(event.getCrop().getId(), profileId);
-
-		cropEventRepository.delete(event);
+		int deleted = cropEventRepository.deleteByIdAndProfileId(eventId, profileId);
+		if (deleted == 0) {
+			throw new ResourceNotFoundException("Evento", eventId);
+		}
 		log.info("delete_event eventId={}", eventId);
 	}
 

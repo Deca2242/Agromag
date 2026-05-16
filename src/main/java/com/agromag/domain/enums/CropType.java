@@ -2,17 +2,6 @@ package com.agromag.domain.enums;
 
 // Tipos de cultivos soportados en la región del Magdalena
 public enum CropType {
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-    BANANO,
-    MANGO,
-    YUCA,
-    PLATANO,
-    MAIZ,
-    PALMA
-=======
->>>>>>> Stashed changes
 	BANANO("sigatoka negra, trips, picudo negro"),
 	MANGO("mosca de la fruta, antracnosis, trips"),
 	YUCA("mosca blanca, ácaros, bacteriosis"),
@@ -30,8 +19,6 @@ public enum CropType {
 	public String getCommonPests() {
 		return commonPests;
 	}
-<<<<<<< Updated upstream
-=======
 
 	// Etiqueta legible para el nombre del cultivo
 	public String label() {
@@ -44,6 +31,4 @@ public enum CropType {
 			case PALMA -> "Palma";
 		};
 	}
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 }

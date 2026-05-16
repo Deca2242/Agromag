@@ -7,7 +7,10 @@ import com.agromag.dto.request.CropRequest;
 import com.agromag.dto.response.CropResponse;
 import com.agromag.exception.ResourceNotFoundException;
 import com.agromag.exception.UnauthorizedCropAccessException;
+import com.agromag.repository.AlertRepository;
+import com.agromag.repository.CropEventRepository;
 import com.agromag.repository.CropRepository;
+import com.agromag.repository.RecommendationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,10 +26,20 @@ public class CropService {
 	private static final Logger log = LoggerFactory.getLogger(CropService.class);
 
 	private final CropRepository cropRepository;
+	private final AlertRepository alertRepository;
+	private final CropEventRepository cropEventRepository;
+	private final RecommendationRepository recommendationRepository;
 	private final ProfileService profileService;
 
-	public CropService(CropRepository cropRepository, ProfileService profileService) {
+	public CropService(CropRepository cropRepository,
+					   AlertRepository alertRepository,
+					   CropEventRepository cropEventRepository,
+					   RecommendationRepository recommendationRepository,
+					   ProfileService profileService) {
 		this.cropRepository = cropRepository;
+		this.alertRepository = alertRepository;
+		this.cropEventRepository = cropEventRepository;
+		this.recommendationRepository = recommendationRepository;
 		this.profileService = profileService;
 	}
 
@@ -77,9 +90,16 @@ public class CropService {
 	// Elimina un cultivo verificando propiedad
 	@Transactional
 	public void deleteCrop(UUID cropId, UUID profileId) {
-		Crop crop = findCropAndValidateOwnership(cropId, profileId);
-		cropRepository.delete(crop);
-		log.info("delete_crop cropId={} profileId={}", cropId, profileId);
+		findCropAndValidateOwnership(cropId, profileId);
+		int deletedAlerts = alertRepository.deleteByCrop_Id(cropId);
+		int deletedRecommendations = recommendationRepository.deleteByCrop_Id(cropId);
+		int deletedEvents = cropEventRepository.deleteByCrop_Id(cropId);
+		int deletedCrops = cropRepository.deleteByIdAndProfileId(cropId, profileId);
+		log.info("delete_crop cropId={} profileId={} deletedCrops={} deletedAlerts={} deletedRecommendations={} deletedEvents={}",
+				cropId, profileId, deletedCrops, deletedAlerts, deletedRecommendations, deletedEvents);
+		if (deletedCrops == 0) {
+			throw new ResourceNotFoundException("Cultivo", cropId);
+		}
 	}
 
 	// Busca un cultivo y valida que pertenece al usuario (usado por CropEventService y RecommendationService)

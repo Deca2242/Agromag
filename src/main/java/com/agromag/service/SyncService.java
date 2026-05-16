@@ -35,34 +35,35 @@ public class SyncService {
 	private final CropService cropService;
 	private final CropEventService cropEventService;
 	private final RecommendationService recommendationService;
+	private final AlertService alertService;
 
 	public SyncService(CropRepository cropRepository,
 					   CropEventRepository cropEventRepository,
 					   CropService cropService,
 					   CropEventService cropEventService,
-					   RecommendationService recommendationService) {
+					   RecommendationService recommendationService,
+					   AlertService alertService) {
 		this.cropRepository = cropRepository;
 		this.cropEventRepository = cropEventRepository;
 		this.cropService = cropService;
 		this.cropEventService = cropEventService;
 		this.recommendationService = recommendationService;
+		this.alertService = alertService;
 	}
 
-<<<<<<< Updated upstream
-	// Procesamiento por fases con reporte parcial de errores.
-	// Cada fase tiene su propia transacción para evitar rollback total por un error aislado.
-=======
-<<<<<<< Updated upstream
-=======
 	// Procesamiento por fases con reporte parcial de errores.
 	// Todas las fases comparten una unica transaccion; los errores individuales se capturan
 	// para evitar rollback total por un fallo aislado.
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 	@Transactional
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
 		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",
 				profileId, request.crops().size(), request.events().size(), request.decisions().size());
+
+		// Limpieza de alertas huérfanas (cultivos eliminados sin cascade)
+		int orphanedAlerts = alertService.cleanupOrphanedAlerts();
+		if (orphanedAlerts > 0) {
+			log.info("sync_cleanup_orphaned_alerts profileId={} deleted={}", profileId, orphanedAlerts);
+		}
 
 		List<CropResponse> syncedCrops = new ArrayList<>();
 		List<CropEventResponse> syncedEvents = new ArrayList<>();

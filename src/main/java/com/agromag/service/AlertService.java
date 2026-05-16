@@ -53,6 +53,8 @@ public class AlertService {
 
 	@Transactional(readOnly = true)
 	public Page<AlertResponse> getAlerts(UUID profileId, RecommendationType type, Pageable pageable) {
+		// Limpieza automática de alertas huérfanas
+		cleanupOrphanedAlerts();
 		if (type != null) {
 			return alertRepository.findByProfile_IdAndTypeOrderByCreatedAtDesc(profileId, type, pageable)
 					.map(AlertResponse::from);
@@ -83,12 +85,10 @@ public class AlertService {
 
 	@Transactional
 	public void deleteAlert(UUID profileId, UUID alertId) {
-		Alert alert = alertRepository.findById(alertId)
-				.orElseThrow(() -> new com.agromag.exception.ResourceNotFoundException("Alerta", alertId));
-		if (!alert.getProfile().getId().equals(profileId)) {
-			throw new com.agromag.exception.AccessDeniedException("No tienes acceso a esta alerta");
+		int deleted = alertRepository.deleteByIdAndProfileId(alertId, profileId);
+		if (deleted == 0) {
+			throw new com.agromag.exception.ResourceNotFoundException("Alerta", alertId);
 		}
-		alertRepository.delete(alert);
 		log.info("alert_deleted alertId={} profileId={}", alertId, profileId);
 	}
 
@@ -96,6 +96,15 @@ public class AlertService {
 	public int deleteAllRead(UUID profileId) {
 		int deleted = alertRepository.deleteAllByProfile_IdAndReadAtIsNotNull(profileId);
 		log.info("alert_delete_all_read profileId={} deleted={}", profileId, deleted);
+		return deleted;
+	}
+
+	@Transactional
+	public int cleanupOrphanedAlerts() {
+		int deleted = alertRepository.deleteOrphanedByMissingCrop();
+		if (deleted > 0) {
+			log.info("alert_cleanup_orphaned deleted={}", deleted);
+		}
 		return deleted;
 	}
 

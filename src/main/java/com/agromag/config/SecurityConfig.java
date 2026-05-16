@@ -25,43 +25,21 @@ public class SecurityConfig {
 			.sessionManagement(session ->
 				session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
-<<<<<<< Updated upstream
-					.requestMatchers("/api/auth/**").permitAll()
-					.requestMatchers("/error").permitAll()
-					// Swagger UI y OpenAPI docs — solo accesibles en desarrollo
-=======
-<<<<<<< Updated upstream
-				.requestMatchers("/api/auth/**").permitAll()
-				.requestMatchers("/error").permitAll()
-				.requestMatchers("/api/adr/**").hasRole("ADR_TECHNICIAN")
-				.requestMatchers("/api/**").authenticated()
-				.anyRequest().denyAll()
-			)
-=======
 					.requestMatchers("/api/health").permitAll()
 					.requestMatchers("/api/auth/**").permitAll()
 					.requestMatchers("/error").permitAll()
 					// Swagger UI y OpenAPI docs — requieren autenticación
->>>>>>> Stashed changes
 					.requestMatchers(
 						"/swagger-ui.html",
 						"/swagger-ui/**",
 						"/v3/api-docs",
 						"/v3/api-docs/**",
 						"/v3/api-docs.yaml"
-<<<<<<< Updated upstream
-					).permitAll()
+					).authenticated()
 					.requestMatchers("/api/adr/**").hasRole("ADR_TECHNICIAN")
 					.requestMatchers("/api/**").authenticated()
 					.anyRequest().denyAll()
 				)
-=======
-					).authenticated()
-					.requestMatchers("/api/**").authenticated()
-					.anyRequest().denyAll()
-				)
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 			.oauth2ResourceServer(oauth2 -> oauth2
 				.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
 			);
