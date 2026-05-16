@@ -56,6 +56,7 @@ public class AssistantService {
 	private static final String ASSISTANT_MODEL_LABEL = "DeepSeek via OpenRouter";
 
 	private enum AssistantIntent {
+		SUMMARY,
 		CROPS,
 		ALERTS,
 		RECOMMENDATIONS,
@@ -294,6 +295,9 @@ public class AssistantService {
 				(banano, mango, yuca, plátano, maíz, palma). Responde siempre en español.
 				No uses Markdown. No uses **, __, títulos con #, tablas Markdown ni bloques de código salvo que el usuario lo pida.
 				Usa texto plano fácil de leer en móvil. Si necesitas listar puntos, usa guiones simples.
+				Da orientación agrícola práctica, no diagnósticos definitivos. Si hay riesgo alto, recomienda inspección del cultivo y validación con un técnico local.
+				No recomiendes químicos específicos ni dosis peligrosas sin aclarar que requieren confirmación técnica.
+				Si el usuario pide una recomendación formal de riego, fertilización o fitosanitaria, explica que puede generarla desde la ficha del cultivo para usar clima y parámetros actuales.
 
 				== RESUMEN DE CONTEXTO REAL DE LA APP ==
 				Cultivos detectados: %d
@@ -445,6 +449,7 @@ public class AssistantService {
 	private String buildDirectReply(String message, UserContext ctx) {
 		AssistantIntent intent = detectIntent(message);
 		return switch (intent) {
+			case SUMMARY -> buildSummaryReply(ctx);
 			case CROPS -> buildCropsReply(ctx);
 			case ALERTS -> buildAlertsReply(ctx);
 			case RECOMMENDATIONS -> buildRecommendationsReply(ctx);
@@ -462,6 +467,9 @@ public class AssistantService {
 		String normalized = Normalizer.normalize(message, Normalizer.Form.NFD)
 				.replaceAll("\\p{M}", "")
 				.toLowerCase(Locale.ROOT);
+		if (containsAny(normalized, "resumen", "estado de mi finca", "como esta mi finca", "mi finca hoy", "panorama")) {
+			return AssistantIntent.SUMMARY;
+		}
 		if (containsAny(normalized, "alerta", "alertas", "riesgo", "riesgos")) {
 			return AssistantIntent.ALERTS;
 		}
@@ -492,6 +500,30 @@ public class AssistantService {
 			}
 		}
 		return false;
+	}
+
+	private String buildSummaryReply(UserContext ctx) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("Resumen de tu finca hoy:\n");
+		if (ctx.crops().isEmpty()) {
+			sb.append("- No veo cultivos registrados en tu cuenta.\n");
+		} else {
+			sb.append("- Cultivos registrados: ").append(ctx.crops().size())
+					.append(" (").append(buildCropTypeSummary(ctx.crops())).append(").\n");
+		}
+		sb.append("- Clima: ").append(ctx.climateInfo()).append(".\n");
+		sb.append("- Alertas activas: ").append(ctx.alerts().size()).append(".\n");
+		sb.append("- Recomendaciones pendientes: ").append(ctx.recommendations().size()).append(".\n");
+		if (!ctx.alerts().isEmpty()) {
+			sb.append("Acción recomendada: atiende primero las alertas de mayor riesgo y registra la labor realizada.");
+		} else if (!ctx.recommendations().isEmpty()) {
+			sb.append("Acción recomendada: revisa las recomendaciones pendientes y marca si las aplicaste.");
+		} else if (!ctx.crops().isEmpty()) {
+			sb.append("Acción recomendada: registra riego, fertilización u observaciones recientes para mejorar el seguimiento.");
+		} else {
+			sb.append("Acción recomendada: registra tu primer cultivo para recibir recomendaciones personalizadas.");
+		}
+		return sb.toString().trim();
 	}
 
 	private String buildCropsReply(UserContext ctx) {
@@ -667,6 +699,7 @@ public class AssistantService {
 
 	private List<String> generateSuggestions(UserContext ctx) {
 		List<String> suggestions = new ArrayList<>();
+		suggestions.add("Resume mi finca hoy");
 		if (!ctx.crops().isEmpty()) {
 			suggestions.add("¿Puedes ver mis cultivos?");
 		}
@@ -682,8 +715,9 @@ public class AssistantService {
 		if (!ctx.crops().isEmpty()) {
 			CropSummary first = ctx.crops().get(0);
 			suggestions.add("¿Qué plagas vigilo en " + first.cropType().label() + "?");
+			suggestions.add("¿Qué labor registro hoy?");
 		}
-		if (suggestions.isEmpty()) {
+		if (suggestions.size() == 1) {
 			suggestions.add("¿Cómo registro un nuevo cultivo?");
 			suggestions.add("¿Qué plagas debo vigilar?");
 		}

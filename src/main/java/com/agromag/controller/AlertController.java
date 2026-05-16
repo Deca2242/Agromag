@@ -85,6 +85,18 @@ public class AlertController {
 		return ResponseEntity.noContent().build();
 	}
 
+	@Operation(summary = "Marcar todas como leidas", description = "Marca todas las alertas no leidas del usuario como leidas")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "Alertas actualizadas"),
+		@ApiResponse(responseCode = "401", description = "No autenticado")
+	})
+	@PatchMapping("/alerts/read-all")
+	public ResponseEntity<Map<String, Object>> markAllAsRead(Principal principal) {
+		UUID userId = SecurityUtils.getCurrentUserId(principal);
+		int updated = alertService.markAllAsRead(userId);
+		return ResponseEntity.ok(Map.of("updated", updated));
+	}
+
 	@Operation(summary = "Eliminar alerta", description = "Elimina una alerta especifica")
 	@ApiResponses({
 		@ApiResponse(responseCode = "204", description = "Alerta eliminada"),

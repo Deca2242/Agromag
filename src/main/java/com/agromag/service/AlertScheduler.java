@@ -23,6 +23,7 @@ public class AlertScheduler {
 	public void runHourlyAlertEvaluation() {
 		log.info("alert_scheduler_start");
 		try {
+			alertService.cleanupOrphanedAlerts();
 			int created = alertService.evaluateAndCreateAlertsForAllCrops();
 			log.info("alert_scheduler_done alertsCreated={}", created);
 		} catch (Exception e) {

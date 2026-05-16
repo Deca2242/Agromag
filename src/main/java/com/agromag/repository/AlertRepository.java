@@ -64,4 +64,9 @@ public interface AlertRepository extends JpaRepository<Alert, UUID> {
 	int markAsReadDirect(@Param("alertId") UUID alertId,
 						 @Param("profileId") UUID profileId,
 						 @Param("now") java.time.LocalDateTime now);
+
+	@Modifying
+	@Query("UPDATE Alert a SET a.readAt = :now WHERE a.profile.id = :profileId AND a.readAt IS NULL")
+	int markAllAsReadDirect(@Param("profileId") UUID profileId,
+						  @Param("now") java.time.LocalDateTime now);
 }

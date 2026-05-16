@@ -41,11 +41,10 @@ public class AiRecommendationService {
 			String prompt = buildIrrigationPrompt(crop, params, climate);
 			log.info("ai_irrigation_request cropId={}", crop.getId());
 
-			String raw = callAi(prompt);
-			JsonNode json = objectMapper.readTree(raw);
+			JsonNode json = callAiForJson(prompt);
 
 			RiskLevel level = parseLevel(json, "level", crop.getId().toString());
-			String message = safeText(json, "message");
+			String message = requireText(json, "message", crop.getId().toString());
 
 			log.info("ai_irrigation_response cropId={} level={}", crop.getId(), level);
 
@@ -73,14 +72,13 @@ public class AiRecommendationService {
 
 			log.info("ai_fertilizer_request cropId={} weeks={}", crop.getId(), weeksSinceSowing);
 
-			String raw = callAi(prompt);
-			JsonNode json = objectMapper.readTree(raw);
+			JsonNode json = callAiForJson(prompt);
 
-			String cropStage = safeText(json, "cropStage");
-			String recommendedNutrient = safeText(json, "recommendedNutrient");
-			String recommendedDose = safeText(json, "recommendedDose");
+			String cropStage = requireText(json, "cropStage", crop.getId().toString());
+			String recommendedNutrient = requireText(json, "recommendedNutrient", crop.getId().toString());
+			String recommendedDose = requireText(json, "recommendedDose", crop.getId().toString());
 			RiskLevel level = parseLevel(json, "level", crop.getId().toString());
-			String message = safeText(json, "message");
+			String message = requireText(json, "message", crop.getId().toString());
 
 			log.info("ai_fertilizer_response cropId={} stage={} level={}", crop.getId(), cropStage, level);
 
@@ -109,13 +107,12 @@ public class AiRecommendationService {
 			String prompt = buildPhytosanitaryPrompt(crop, params, climate, ruleLevel);
 			log.info("ai_phytosanitary_request cropId={} ruleLevel={}", crop.getId(), ruleLevel);
 
-			String raw = callAi(prompt);
-			JsonNode json = objectMapper.readTree(raw);
+			JsonNode json = callAiForJson(prompt);
 
 			RiskLevel level = parseLevel(json, "level", crop.getId().toString());
-			String suspectedPests = safeText(json, "suspectedPests");
-			String preventiveAction = safeText(json, "preventiveAction");
-			String aiMessage = safeText(json, "message");
+			String suspectedPests = requireText(json, "suspectedPests", crop.getId().toString());
+			String preventiveAction = requireText(json, "preventiveAction", crop.getId().toString());
+			String aiMessage = requireText(json, "message", crop.getId().toString());
 
 			// El mensaje final combina el diagnóstico de la IA con la acción preventiva recomendada
 			String fullMessage = aiMessage + " Acción: " + preventiveAction;
@@ -140,8 +137,8 @@ public class AiRecommendationService {
 		}
 	}
 
-	// Llama al modelo de IA y limpia los bloques de código Markdown de la respuesta
-	private String callAi(String prompt) {
+	// Llama al modelo de IA y extrae un objeto JSON aunque el modelo agregue texto alrededor.
+	private JsonNode callAiForJson(String prompt) {
 		String response = chatClient.prompt()
 				.user(prompt)
 				.call()
@@ -149,12 +146,31 @@ public class AiRecommendationService {
 		if (response == null) {
 			throw new AiServiceException("La IA devolvió una respuesta vacía", null);
 		}
-		return response.replaceAll("```json", "").replaceAll("```", "").trim();
+		try {
+			return objectMapper.readTree(extractJsonObject(response));
+		} catch (Exception e) {
+			log.warn("ai_invalid_json raw={}", sanitizeAiText(response));
+			throw new AiServiceException("La IA devolvió JSON inválido", e);
+		}
+	}
+
+	private String extractJsonObject(String response) {
+		String cleaned = response
+				.replace("```json", "")
+				.replace("```JSON", "")
+				.replace("```", "")
+				.trim();
+		int start = cleaned.indexOf('{');
+		int end = cleaned.lastIndexOf('}');
+		if (start < 0 || end <= start) {
+			throw new AiServiceException("La IA no devolvió un objeto JSON", null);
+		}
+		return cleaned.substring(start, end + 1);
 	}
 
 	// Parsea el nivel de riesgo del JSON; si la IA devuelve un valor desconocido, usa MEDIUM
 	private RiskLevel parseLevel(JsonNode json, String field, String cropId) {
-		String text = safeText(json, field);
+		String text = requireText(json, field, cropId);
 		try {
 			return RiskLevel.valueOf(text.toUpperCase());
 		} catch (IllegalArgumentException e) {
@@ -163,13 +179,24 @@ public class AiRecommendationService {
 		}
 	}
 
-	// Extrae texto de un campo JSON de forma segura — devuelve "No disponible" si el campo falta
-	private String safeText(JsonNode json, String field) {
-		if (json == null || !json.has(field) || json.get(field).isNull()) {
-			log.warn("ai_missing_field field={}", field);
-			return "No disponible";
+	private String requireText(JsonNode json, String field, String cropId) {
+		if (json == null || !json.has(field) || json.get(field).isNull() || json.get(field).asText().isBlank()) {
+			log.warn("ai_missing_required_field cropId={} field={}", cropId, field);
+			throw new AiServiceException("La IA omitió un campo requerido: " + field, null);
 		}
-		return json.get(field).asText();
+		return sanitizeAiText(json.get(field).asText());
+	}
+
+	private String sanitizeAiText(String text) {
+		if (text == null) {
+			return "";
+		}
+		return text
+				.replace("**", "")
+				.replace("__", "")
+				.replace("```json", "")
+				.replace("```", "")
+				.trim();
 	}
 
 	private String buildIrrigationPrompt(Crop crop, CropParameter params, ClimateData climate) {
@@ -190,9 +217,11 @@ public class AiRecommendationService {
 
 				Con base en estos datos, indica si el productor debe regar hoy, incluyendo:
 				1. Nivel de urgencia (LOW, MEDIUM o HIGH)
-				2. Mensaje claro en español con ícono de gota: debe decir si regar o no, y cuánta agua aproximada
+				2. Mensaje claro en español: debe decir si regar o no, cantidad orientativa y precaución contra encharcamiento
 
-				Responde ÚNICAMENTE en formato JSON con las claves: level, message
+				No inventes cálculos exactos de lámina si no hay datos suficientes; usa la referencia del cultivo como orientación.
+				Responde ÚNICAMENTE en JSON válido con las claves: level, message.
+				No uses Markdown, emojis, bloques de código ni texto antes o después del JSON.
 				""".formatted(
 				crop.getCropType(),
 				crop.getMunicipality().getDisplayName(),
@@ -237,10 +266,13 @@ public class AiRecommendationService {
 				2. Nutriente recomendado (N, P, K, u otro)
 				3. Dosis recomendada por hectárea
 				4. Nivel de riesgo si no se aplica (LOW, MEDIUM o HIGH)
-				5. Mensaje explicativo breve en español
+				5. Mensaje explicativo breve en español con precaución y momento sugerido de aplicación
 
-				Responde ÚNICAMENTE en formato JSON con las claves:
-				cropStage, recommendedNutrient, recommendedDose, level, message
+				Si no hay análisis de suelo, indica que la dosis es orientativa y debe validarse con un técnico local.
+				No recomiendes mezclas peligrosas ni excedas rangos razonables sin advertencia.
+				Responde ÚNICAMENTE en JSON válido con las claves:
+				cropStage, recommendedNutrient, recommendedDose, level, message.
+				No uses Markdown, emojis, bloques de código ni texto antes o después del JSON.
 				""".formatted(
 				crop.getCropType(),
 				crop.getSownDate(),
@@ -287,10 +319,13 @@ public class AiRecommendationService {
 				1. Nivel de riesgo fitosanitario real (LOW, MEDIUM o HIGH)
 				2. Plagas o enfermedades sospechosas para este cultivo en estas condiciones
 				3. Acción preventiva concreta que el productor puede realizar hoy
-				4. Mensaje breve en español con ícono de insecto, sin tecnicismos
+				4. Mensaje breve en español, sin tecnicismos
 
-				Responde ÚNICAMENTE en formato JSON con las claves:
-				level, suspectedPests, preventiveAction, message
+				No diagnostiques una plaga como confirmada. Habla de riesgo probable y recomienda inspección visual.
+				No recomiendes químicos específicos sin confirmación técnica.
+				Responde ÚNICAMENTE en JSON válido con las claves:
+				level, suspectedPests, preventiveAction, message.
+				No uses Markdown, emojis, bloques de código ni texto antes o después del JSON.
 				""".formatted(
 				crop.getCropType(),
 				crop.getMunicipality().getDisplayName(),

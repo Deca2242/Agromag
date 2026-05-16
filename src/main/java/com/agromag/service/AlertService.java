@@ -53,8 +53,6 @@ public class AlertService {
 
 	@Transactional(readOnly = true)
 	public Page<AlertResponse> getAlerts(UUID profileId, RecommendationType type, Pageable pageable) {
-		// Limpieza automática de alertas huérfanas
-		cleanupOrphanedAlerts();
 		if (type != null) {
 			return alertRepository.findByProfile_IdAndTypeOrderByCreatedAtDesc(profileId, type, pageable)
 					.map(AlertResponse::from);
@@ -81,6 +79,13 @@ public class AlertService {
 			throw new com.agromag.exception.ResourceNotFoundException("Alerta", alertId);
 		}
 		log.info("alert_mark_read alertId={}", alertId);
+	}
+
+	@Transactional
+	public int markAllAsRead(UUID profileId) {
+		int updated = alertRepository.markAllAsReadDirect(profileId, LocalDateTime.now());
+		log.info("alert_mark_all_read profileId={} updated={}", profileId, updated);
+		return updated;
 	}
 
 	@Transactional
