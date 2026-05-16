@@ -18,7 +18,8 @@ public record CropResponse(
 		Municipality municipality,
 		LocalDate sownDate,
 		SyncStatus syncStatus,
-		LocalDateTime createdAt
+		LocalDateTime createdAt,
+		LocalDateTime updatedAt
 ) {
 	public static CropResponse from(Crop crop) {
 		return new CropResponse(
@@ -28,7 +29,8 @@ public record CropResponse(
 				crop.getMunicipality(),
 				crop.getSownDate(),
 				crop.getSyncStatus(),
-				crop.getCreatedAt()
+				crop.getCreatedAt(),
+				crop.getUpdatedAt()
 		);
 	}
 }

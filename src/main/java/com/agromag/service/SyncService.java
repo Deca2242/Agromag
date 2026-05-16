@@ -48,8 +48,17 @@ public class SyncService {
 		this.recommendationService = recommendationService;
 	}
 
+<<<<<<< Updated upstream
 	// Procesamiento por fases con reporte parcial de errores.
 	// Cada fase tiene su propia transacción para evitar rollback total por un error aislado.
+=======
+<<<<<<< Updated upstream
+=======
+	// Procesamiento por fases con reporte parcial de errores.
+	// Todas las fases comparten una unica transaccion; los errores individuales se capturan
+	// para evitar rollback total por un fallo aislado.
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 	@Transactional
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
 		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",

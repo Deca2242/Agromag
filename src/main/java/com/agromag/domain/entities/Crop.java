@@ -61,6 +61,10 @@ public class Crop {
 	@Column(name = "updated_at")
 	private LocalDateTime updatedAt;
 
+	@Version
+	@Column(name = "version")
+	private Long version;
+
 	@OneToMany(mappedBy = "crop", cascade = CascadeType.ALL)
 	private List<CropEvent> events = new ArrayList<>();
 
