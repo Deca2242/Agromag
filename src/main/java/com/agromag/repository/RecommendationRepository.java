@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-// Acceso a datos de recomendaciones
 public interface RecommendationRepository extends JpaRepository<Recommendation, UUID> {
 
 	@EntityGraph(attributePaths = {"crop"})
@@ -40,5 +39,5 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
 
 	@EntityGraph(attributePaths = {"crop"})
 	@Query("SELECT r FROM Recommendation r WHERE r.crop.profile.id = :profileId AND r.followed IS NULL ORDER BY r.generatedAt DESC")
-    List<Recommendation> findPendingByProfileId(@Param("profileId") UUID profileId, org.springframework.data.domain.Pageable pageable);
+	List<Recommendation> findPendingByProfileId(@Param("profileId") UUID profileId, org.springframework.data.domain.Pageable pageable);
 }

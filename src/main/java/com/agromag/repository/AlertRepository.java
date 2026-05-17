@@ -14,7 +14,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.UUID;
 
-// Acceso a datos de alertas
 public interface AlertRepository extends JpaRepository<Alert, UUID> {
 
 	@EntityGraph(attributePaths = {"crop"})

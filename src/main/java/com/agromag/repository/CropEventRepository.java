@@ -12,7 +12,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.UUID;
 
-// Acceso a datos de eventos de cultivos
 public interface CropEventRepository extends JpaRepository<CropEvent, UUID> {
 
 	@EntityGraph(attributePaths = {"crop"})
