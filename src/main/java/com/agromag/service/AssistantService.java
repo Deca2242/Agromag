@@ -20,6 +20,8 @@ import com.agromag.repository.AlertRepository;
 import com.agromag.repository.CropEventRepository;
 import com.agromag.repository.CropRepository;
 import com.agromag.repository.RecommendationRepository;
+import com.agromag.service.WebSearchService.WebSearchResult;
+import com.agromag.service.WebSearchService.WebSearchSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -73,6 +75,7 @@ public class AssistantService {
 	private final RecommendationRepository recommendationRepository;
 	private final CropEventRepository cropEventRepository;
 	private final ClimateService climateService;
+	private final WebSearchService webSearchService;
 
 	public AssistantService(
 			ChatClient.Builder chatClientBuilder,
@@ -81,7 +84,8 @@ public class AssistantService {
 			AlertRepository alertRepository,
 			RecommendationRepository recommendationRepository,
 			CropEventRepository cropEventRepository,
-			ClimateService climateService) {
+			ClimateService climateService,
+			WebSearchService webSearchService) {
 		this.chatClient = chatClientBuilder.build();
 		this.profileService = profileService;
 		this.cropRepository = cropRepository;
@@ -89,6 +93,7 @@ public class AssistantService {
 		this.recommendationRepository = recommendationRepository;
 		this.cropEventRepository = cropEventRepository;
 		this.climateService = climateService;
+		this.webSearchService = webSearchService;
 	}
 
 	public ProfileResponse getOrCreateProfileForChat(UUID profileId, String email) {
@@ -124,12 +129,13 @@ public class AssistantService {
 		UserContext ctx = buildUserContext(profileId, profile);
 
 		List<String> suggestions = generateSuggestions(ctx);
-		String directReply = buildDirectReply(req.message(), ctx);
+		boolean useWebSearch = shouldUseWebSearch(req.message());
+		String directReply = useWebSearch ? null : buildDirectReply(req.message(), ctx);
 		if (directReply != null) {
 			return new ChatResponse(directReply, Instant.now(), suggestions);
 		}
 
-		String systemPrompt = buildSystemPrompt(profile, ctx);
+		String systemPrompt = buildSystemPrompt(profile, ctx, useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
 
 		var prompt = chatClient.prompt().system(systemPrompt);
 
@@ -165,23 +171,27 @@ public class AssistantService {
 				ProfileResponse profile = getOrCreateProfileForChat(profileId, email);
 				UserContext ctx = buildUserContext(profileId, profile);
 				List<String> suggestions = generateSuggestions(ctx);
-				String directReply = buildDirectReply(req.message(), ctx);
+				boolean useWebSearch = shouldUseWebSearch(req.message());
+				String directReply = useWebSearch ? null : buildDirectReply(req.message(), ctx);
 				if (directReply != null) {
 					if (!completed.get()) {
-						emitter.send(SseEmitter.event().name("token").data(directReply));
-						emitter.send(SseEmitter.event().name("suggestions").data(suggestions));
-						emitter.send(SseEmitter.event().name("done").data(""));
+						sendTypingChunks(emitter, completed, directReply);
+						sendSse(emitter, "suggestions", suggestions);
+						sendSse(emitter, "done", "");
 					}
 					emitter.complete();
 					return;
 				}
 
-				String systemPrompt = buildSystemPrompt(profile, ctx);
+				String systemPrompt = buildSystemPrompt(profile, ctx, useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
 
 				log.info("assistant_system_prompt_length={}", systemPrompt.length());
 				log.debug("assistant_system_prompt=\n{}", systemPrompt);
 
 				var prompt = chatClient.prompt().system(systemPrompt);
+				if (!completed.get()) {
+					sendSse(emitter, "status", "AGROBOT está pensando...");
+				}
 
 				List<ChatRequest.ChatTurn> history = req.history();
 				if (history != null && !history.isEmpty()) {
@@ -198,17 +208,21 @@ public class AssistantService {
 
 				String fullReply = sanitizeAssistantReply(prompt.user(req.message()).call().content());
 
-				if (!completed.get() && fullReply != null) {
-					emitter.send(SseEmitter.event().name("token").data(fullReply));
-					emitter.send(SseEmitter.event().name("suggestions").data(suggestions));
-					emitter.send(SseEmitter.event().name("done").data(""));
+				if (!completed.get()) {
+					if (fullReply.isBlank()) {
+						sendSse(emitter, "token", "No pude generar una respuesta en este momento.");
+					} else {
+						sendTypingChunks(emitter, completed, fullReply);
+					}
+					sendSse(emitter, "suggestions", suggestions);
+					sendSse(emitter, "done", "");
 				}
 				emitter.complete();
 			} catch (Exception e) {
 				log.error("assistant_stream_error", e);
 				if (!completed.get()) {
 					try {
-						emitter.send(SseEmitter.event().name("error").data("Error del asistente: " + e.getMessage()));
+						sendSse(emitter, "error", "Error del asistente: " + e.getMessage());
 					} catch (IOException ex) {
 						// ignored
 					}
@@ -273,18 +287,25 @@ public class AssistantService {
 	}
 
 	String buildSystemPrompt(ProfileResponse profile, UserContext ctx) {
-		return buildSystemPromptInternal(profile.fullName(), profile.municipality(), ctx);
+		return buildSystemPrompt(profile, ctx, null);
+	}
+
+	String buildSystemPrompt(ProfileResponse profile, UserContext ctx, String webContext) {
+		return buildSystemPromptInternal(profile.fullName(), profile.municipality(), ctx, webContext);
 	}
 
 	String buildSystemPrompt(Profile profile, UserContext ctx) {
-		return buildSystemPromptInternal(profile.getFullName(), profile.getMunicipality(), ctx);
+		return buildSystemPromptInternal(profile.getFullName(), profile.getMunicipality(), ctx, null);
 	}
 
-	private String buildSystemPromptInternal(String fullName, Municipality municipality, UserContext ctx) {
+	private String buildSystemPromptInternal(String fullName, Municipality municipality, UserContext ctx, String webContext) {
 		String cropsBlock = buildCropsContextBlock(ctx.crops());
 		String alertsBlock = buildAlertsContextBlock(ctx.alerts());
 		String recsBlock = buildRecommendationsContextBlock(ctx.recommendations());
 		String eventsBlock = buildRecentEventsBlock(ctx.events());
+		String webBlock = webContext == null || webContext.isBlank()
+				? "No se usó búsqueda web para este mensaje."
+				: webContext;
 
 		return """
 				Tu identidad es AGROBOT, el asistente agrícola de Agromag para productores del Magdalena, Colombia.
@@ -329,6 +350,12 @@ public class AssistantService {
 				== ACTIVIDADES RECIENTES REGISTRADAS ==
 				%s
 
+				== INFORMACIÓN WEB ACTUALIZADA ==
+				%s
+
+				Si hay información web, úsala solo como referencia actualizada y menciona las fuentes por nombre o URL.
+				Si las fuentes web contradicen el contexto real de la app, prioriza los datos de la app para cultivos, alertas y recomendaciones del usuario.
+
 				Sé proactivo: si hay alertas críticas o recomendaciones pendientes, menciónalas.
 				Si el usuario pregunta sobre un cultivo específico, usa la información detallada de arriba.
 				Proporciona consejos prácticos basados en las condiciones climáticas actuales.
@@ -345,7 +372,8 @@ public class AssistantService {
 				cropsBlock,
 				alertsBlock,
 				recsBlock,
-				eventsBlock
+				eventsBlock,
+				webBlock
 		);
 	}
 
@@ -357,6 +385,104 @@ public class AssistantService {
 				.replace("**", "")
 				.replace("__", "")
 				.trim();
+	}
+
+	private void sendTypingChunks(SseEmitter emitter, AtomicBoolean completed, String text) throws IOException {
+		if (text == null || text.isBlank()) {
+			return;
+		}
+
+		int index = 0;
+		while (!completed.get() && index < text.length()) {
+			int wordEnd = index;
+			while (wordEnd < text.length() && !Character.isWhitespace(text.charAt(wordEnd))) {
+				wordEnd++;
+			}
+
+			int tokenEnd = wordEnd;
+			while (tokenEnd < text.length() && Character.isWhitespace(text.charAt(tokenEnd))) {
+				tokenEnd++;
+			}
+
+			String token = text.substring(index, tokenEnd);
+			if (completed.get()) {
+				return;
+			}
+			sendSse(emitter, "token", token);
+			index = tokenEnd;
+			try {
+				Thread.sleep(token.length() <= 4 ? 28 : 42);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return;
+			}
+		}
+	}
+
+	private void sendSse(SseEmitter emitter, String event, Object data) throws IOException {
+		Object payload = data == null ? "" : data;
+		emitter.send(SseEmitter.event().name(event).data(payload));
+	}
+
+	private boolean shouldUseWebSearch(String message) {
+		if (message == null || message.isBlank()) {
+			return false;
+		}
+		String normalized = Normalizer.normalize(message, Normalizer.Form.NFD)
+				.replaceAll("\\p{M}", "")
+				.toLowerCase(Locale.ROOT);
+
+		boolean explicitlyRequestsResearch = containsAny(normalized,
+				"busca", "buscar", "busqueda", "investiga", "investigar", "internet", "web", "noticia", "noticias",
+				"actualidad", "actualizado", "actualizada", "reciente", "recientes", "hoy", "esta semana");
+		boolean currentAgricultureTopic = containsAny(normalized,
+				"precio", "precios", "mercado", "clima", "pronostico", "ideam", "ica", "agrosavia",
+				"plaga", "plagas", "enfermedad", "enfermedades", "fertilizante", "fertilizantes",
+				"norma", "normativa", "resolucion", "alerta sanitaria");
+
+		return explicitlyRequestsResearch && currentAgricultureTopic;
+	}
+
+	private String buildWebContext(String message, ProfileResponse profile, UserContext ctx) {
+		if (!webSearchService.isAvailable()) {
+			return "El usuario pidió información actualizada, pero la búsqueda web no está habilitada en el servidor.";
+		}
+
+		String query = buildSearchQuery(message, profile, ctx);
+		WebSearchSummary summary = webSearchService.search(query);
+		if (!summary.searched()) {
+			return summary.note();
+		}
+		if (summary.results().isEmpty()) {
+			return "Consulta web: " + query + "\n" + summary.note();
+		}
+
+		StringBuilder sb = new StringBuilder();
+		sb.append("Consulta web: ").append(query).append('\n');
+		sb.append("Resultados encontrados:\n");
+		int index = 1;
+		for (WebSearchResult result : summary.results()) {
+			sb.append(index++).append(". ")
+					.append(result.title().isBlank() ? "Fuente sin título" : result.title());
+			if (!result.url().isBlank()) {
+				sb.append(" — ").append(result.url());
+			}
+			if (!result.content().isBlank()) {
+				sb.append("\nResumen: ").append(result.content());
+			}
+			sb.append('\n');
+		}
+		return sb.toString().trim();
+	}
+
+	private String buildSearchQuery(String message, ProfileResponse profile, UserContext ctx) {
+		String municipality = profile.municipality() != null ? profile.municipality().getDisplayName() : "Magdalena Colombia";
+		String crops = ctx.crops().isEmpty() ? "cultivos agrícolas" : buildCropTypeSummary(ctx.crops());
+		String sanitizedMessage = message.replaceAll("[\r\n]+", " ").trim();
+		if (sanitizedMessage.length() > 180) {
+			sanitizedMessage = sanitizedMessage.substring(0, 180).trim();
+		}
+		return sanitizedMessage + " " + crops + " " + municipality + " Colombia fuentes agrícolas oficiales recientes";
 	}
 
 	static String buildCropsContextBlock(List<CropSummary> crops) {
