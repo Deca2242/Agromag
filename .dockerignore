@@ -1,0 +1,9 @@
+.git
+target
+spring.log
+.env
+.env.*
+!.env.example
+*.iml
+.idea
+.vscode
