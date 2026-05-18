@@ -25,7 +25,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
-// Gestiona la creacion, consulta y marcado de lectura de alertas
 @Service
 public class AlertService {
 
@@ -48,8 +47,6 @@ public class AlertService {
 		this.climateService = climateService;
 		this.props = props;
 	}
-
-	// ── Consultas para el frontend ──────────────────────────────────────
 
 	@Transactional(readOnly = true)
 	public Page<AlertResponse> getAlerts(UUID profileId, RecommendationType type, Pageable pageable) {
@@ -113,8 +110,6 @@ public class AlertService {
 		return deleted;
 	}
 
-	// ── Generacion automatica de alertas (llamado por AlertScheduler) ───
-
 	@Transactional
 	public int evaluateAndCreateAlertsForAllCrops() {
 		List<Crop> allCrops = cropRepository.findAll();
@@ -143,11 +138,8 @@ public class AlertService {
 				return 0;
 			}
 
-			// 1. Riego
 			created += evaluateIrrigation(crop, params, climate);
-			// 2. Fitosanitario
 			created += evaluatePhytosanitary(crop, climate);
-			// 3. Fertilizacion
 			created += evaluateFertilizer(crop, params);
 
 		} catch (Exception e) {
@@ -218,7 +210,7 @@ public class AlertService {
 	private int evaluateFertilizer(Crop crop, CropParameter params) {
 		long weeks = ChronoUnit.WEEKS.between(crop.getSownDate(), LocalDateTime.now().toLocalDate());
 
-		// Fertilizer alerts change slowly — use 24h duplicate window
+		// Las alertas de fertilización cambian lento; evitar duplicados durante 24 horas.
 		LocalDateTime oneDayAgo = LocalDateTime.now().minusHours(24);
 		boolean recentExists = alertRepository.existsRecentUnread(
 				crop.getProfile().getId(), RecommendationType.FERTILIZER, crop.getId(), oneDayAgo);
@@ -256,7 +248,7 @@ public class AlertService {
 
 	private void createAlert(Crop crop, RecommendationType type, AlertSeverity severity,
 							 String title, String message, int iconCode) {
-		// Evitar alertas duplicadas recientes (mismo tipo + mismo cultivo en ultima hora)
+		// Evita alertas duplicadas recientes del mismo tipo y cultivo.
 		LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
 		boolean recentExists = alertRepository.existsRecentUnread(
 				crop.getProfile().getId(), type, crop.getId(), oneHourAgo);
@@ -282,7 +274,6 @@ public class AlertService {
 		log.info("alert_created cropId={} type={} severity={}", crop.getId(), type, severity);
 	}
 
-	// Iconos Material — constantes para uso en alertas
 	static class Icons {
 		static final int WATER_DROP = 0xe5f72;
 		static final int BUG_REPORT = 0xe868;

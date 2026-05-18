@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
-// Lógica de negocio para cultivos con validación de propiedad
 @Service
 public class CropService {
 
@@ -43,7 +42,6 @@ public class CropService {
 		this.profileService = profileService;
 	}
 
-	// Crea un cultivo asociado al perfil (el ID viene del cliente para soporte offline)
 	@Transactional
 	public CropResponse createCrop(UUID profileId, CropRequest request) {
 		Profile profile = profileService.getProfileById(profileId);
@@ -61,7 +59,6 @@ public class CropService {
 		return CropResponse.from(cropRepository.save(crop));
 	}
 
-	// Lista todos los cultivos del usuario autenticado
 	@Transactional(readOnly = true)
 	public List<CropResponse> getCropsByProfile(UUID profileId) {
 		return cropRepository.findByProfile_Id(profileId).stream()
@@ -69,13 +66,11 @@ public class CropService {
 				.toList();
 	}
 
-	// Obtiene un cultivo verificando que pertenece al usuario
 	@Transactional(readOnly = true)
 	public CropResponse getCropById(UUID cropId, UUID profileId) {
 		return CropResponse.from(findCropAndValidateOwnership(cropId, profileId));
 	}
 
-	// Actualiza un cultivo existente verificando propiedad
 	@Transactional
 	public CropResponse updateCrop(UUID cropId, UUID profileId, CropRequest request) {
 		Crop crop = findCropAndValidateOwnership(cropId, profileId);
@@ -87,7 +82,6 @@ public class CropService {
 		return CropResponse.from(cropRepository.save(crop));
 	}
 
-	// Elimina un cultivo verificando propiedad
 	@Transactional
 	public void deleteCrop(UUID cropId, UUID profileId) {
 		findCropAndValidateOwnership(cropId, profileId);
@@ -102,7 +96,6 @@ public class CropService {
 		}
 	}
 
-	// Busca un cultivo y valida que pertenece al usuario (usado por CropEventService y RecommendationService)
 	public Crop findCropAndValidateOwnership(UUID cropId, UUID profileId) {
 		Crop crop = cropRepository.findById(cropId)
 				.orElseThrow(() -> new ResourceNotFoundException("Cultivo", cropId));

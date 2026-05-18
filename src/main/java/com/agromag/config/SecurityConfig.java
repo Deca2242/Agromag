@@ -1,13 +1,12 @@
 package com.agromag.config;
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
-// Seguridad: JWT stateless + roles desde app_metadata de Supabase
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
@@ -26,9 +25,7 @@ public class SecurityConfig {
 				session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 					.requestMatchers("/api/health").permitAll()
-					.requestMatchers("/api/auth/**").permitAll()
 					.requestMatchers("/error").permitAll()
-					// Swagger UI y OpenAPI docs — requieren autenticación
 					.requestMatchers(
 						"/swagger-ui.html",
 						"/swagger-ui/**",

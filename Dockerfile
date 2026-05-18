@@ -13,8 +13,14 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
+RUN useradd --create-home --shell /usr/sbin/nologin agromag
+
 COPY --from=build /app/target/agromag-0.0.1-SNAPSHOT.jar app.jar
+
+RUN chown agromag:agromag app.jar
+
+USER agromag
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]

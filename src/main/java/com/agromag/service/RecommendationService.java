@@ -32,7 +32,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
-// Orquesta la generación de recomendaciones (riego, fertilización, fitosanitaria)
 @Service
 public class RecommendationService {
 
@@ -88,7 +87,6 @@ public class RecommendationService {
 		return page.map(RecommendationResponse::from);
 	}
 
-	// Registra si el productor siguió una recomendación (CU-09)
 	@Transactional
 	public void markDecision(UUID profileId, RecommendationDecisionRequest request) {
 		Recommendation rec = recommendationRepository.findById(request.recommendationId())
@@ -109,7 +107,6 @@ public class RecommendationService {
 		log.info("reset_decision recommendationId={}", recommendationId);
 	}
 
-	// Genera recomendación de riego (RF-04) — IA primero, reglas como respaldo
 	@Transactional
 	public IrrigationRecommendationResponse generateIrrigation(UUID cropId, UUID profileId) {
 		Crop crop = cropService.findCropAndValidateOwnership(cropId, profileId);
@@ -144,7 +141,6 @@ public class RecommendationService {
 		return response;
 	}
 
-	// Genera recomendación de fertilización (RF-05, RF-06) — IA primero, reglas como respaldo
 	@Transactional
 	public FertilizerRecommendationResponse generateFertilizer(UUID cropId, UUID profileId) {
 		Crop crop = cropService.findCropAndValidateOwnership(cropId, profileId);
@@ -172,7 +168,6 @@ public class RecommendationService {
 		return response;
 	}
 
-	// Genera alerta fitosanitaria (RF-07, RF-08) — IA primero, reglas como respaldo
 	@Transactional
 	public PhytosanitaryRecommendationResponse generatePhytosanitary(UUID cropId, UUID profileId) {
 		Crop crop = cropService.findCropAndValidateOwnership(cropId, profileId);
@@ -208,7 +203,6 @@ public class RecommendationService {
 		return response;
 	}
 
-	// Motor de reglas para riego — evalúa umbrales FAO simplificados
 	RuleResult computeIrrigationByRules(ClimateData climate, CropParameter params, Crop crop) {
 		BigDecimal temp = climate.temperature();
 		BigDecimal hum = climate.humidity();
@@ -240,7 +234,6 @@ public class RecommendationService {
 		}
 	}
 
-	// Motor de reglas fitosanitario — temp > 28°C Y humedad > 80% → ALTO; una condición → MEDIO; ninguna → BAJO
 	PhytosanitaryRuleResult computePhytosanitaryByRules(ClimateData climate, Crop crop) {
 		BigDecimal temp = climate.temperature();
 		BigDecimal hum = climate.humidity();
@@ -272,9 +265,6 @@ public class RecommendationService {
 		}
 	}
 
-	// Motor de reglas para fertilización — calcula etapa del cultivo según semanas desde la siembra
-	// Los umbrales son genéricos; la IA proporciona precisión específica por cultivo
-	// Acceso package-private para permitir pruebas unitarias directas
 	FertilizerRuleResult computeFertilizerByRules(Crop crop, CropParameter params, LocalDateTime now) {
 		long weeks = ChronoUnit.WEEKS.between(crop.getSownDate(), LocalDate.now());
 
@@ -313,7 +303,6 @@ public class RecommendationService {
 		return new FertilizerRuleResult(level, message, cropStage, nutrient, dose, (int) weeks);
 	}
 
-	// Busca los parámetros agronómicos del cultivo o lanza 404
 	private CropParameter requireParams(Crop crop) {
 		return cropParameterRepository.findByCropType(crop.getCropType())
 				.orElseThrow(() -> new ResourceNotFoundException("Parámetros del cultivo", crop.getCropType()));
@@ -323,7 +312,6 @@ public class RecommendationService {
 		recommendationRepository.deleteByCrop_IdAndTypeAndFollowedIsNull(cropId, type);
 	}
 
-	// Persiste la recomendación generada en la base de datos
 	private void persist(PersistRequest req) {
 		Recommendation rec = new Recommendation();
 		rec.setId(req.id());
@@ -339,7 +327,6 @@ public class RecommendationService {
 		recommendationRepository.save(rec);
 	}
 
-	// Datos necesarios para persistir una recomendación — reemplaza la lista larga de parámetros
 	private record PersistRequest(
 			UUID id,
 			Crop crop,
@@ -352,13 +339,10 @@ public class RecommendationService {
 			LocalDateTime generatedAt
 	) {}
 
-	// Resultado interno del motor de reglas de riego
 	record RuleResult(RiskLevel level, String message) {}
 
-	// Resultado interno del motor de reglas fitosanitario — incluye plagas sospechosas
 	record PhytosanitaryRuleResult(RiskLevel level, String message, String suspectedPests) {}
 
-	// Resultado interno del motor de reglas de fertilización — incluye etapa, nutriente, dosis y semanas
 	record FertilizerRuleResult(
 			RiskLevel level, String message,
 			String cropStage, String nutrient, String dose, int weeks
