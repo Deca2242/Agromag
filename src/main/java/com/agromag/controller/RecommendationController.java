@@ -1,10 +1,13 @@
 package com.agromag.controller;
 
+import com.agromag.config.RecommendationProperties;
 import com.agromag.dto.request.RecommendationDecisionRequest;
 import com.agromag.dto.response.FertilizerRecommendationResponse;
 import com.agromag.dto.response.IrrigationRecommendationResponse;
 import com.agromag.dto.response.PhytosanitaryRecommendationResponse;
+import com.agromag.dto.response.RecommendationParametersResponse;
 import com.agromag.dto.response.RecommendationResponse;
+import com.agromag.repository.CropParameterRepository;
 import com.agromag.service.RecommendationService;
 import com.agromag.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,9 +33,30 @@ import java.util.UUID;
 public class RecommendationController {
 
 	private final RecommendationService recommendationService;
+	private final RecommendationProperties recommendationProperties;
+	private final CropParameterRepository cropParameterRepository;
 
-	public RecommendationController(RecommendationService recommendationService) {
+	public RecommendationController(
+			RecommendationService recommendationService,
+			RecommendationProperties recommendationProperties,
+			CropParameterRepository cropParameterRepository) {
 		this.recommendationService = recommendationService;
+		this.recommendationProperties = recommendationProperties;
+		this.cropParameterRepository = cropParameterRepository;
+	}
+
+	@Operation(
+		summary = "Parámetros del motor de reglas",
+		description = "Retorna los umbrales de reglas y parámetros agronómicos para sincronizar el motor offline del cliente"
+	)
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "Parámetros del motor de reglas")
+	})
+	@GetMapping("/recommendations/parameters")
+	public ResponseEntity<java.util.Map<String, String>> getRecommendationParameters() {
+		var cropParams = cropParameterRepository.findAllByOrderByCropTypeAsc();
+		var response = RecommendationParametersResponse.from(recommendationProperties, cropParams);
+		return ResponseEntity.ok(response.toFlatMap());
 	}
 
 	@Operation(summary = "Listar recomendaciones", description = "Retorna el historial de recomendaciones de un cultivo")
