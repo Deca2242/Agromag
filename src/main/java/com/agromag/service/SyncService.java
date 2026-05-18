@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-// Procesamiento de sincronización batch offline → servidor
 @Service
 public class SyncService {
 
@@ -52,14 +51,14 @@ public class SyncService {
 	}
 
 	// Procesamiento por fases con reporte parcial de errores.
-	// Todas las fases comparten una unica transaccion; los errores individuales se capturan
-	// para evitar rollback total por un fallo aislado.
-	@Transactional
+	// No lleva transacción propia: cada operación interna (createCrop, updateCrop, etc.)
+	// tiene su propia @Transactional. Esto garantiza que un fallo individual haga rollback
+	// solo de esa operación sin marcar toda la sesión como rollback-only
+	// (evita UnexpectedRollbackException con propagación REQUIRED).
 	public SyncBatchResponse processBatch(UUID profileId, SyncBatchRequest request) {
 		log.info("sync_batch_start profileId={} crops={} events={} decisions={}",
 				profileId, request.crops().size(), request.events().size(), request.decisions().size());
 
-		// Limpieza de alertas huérfanas (cultivos eliminados sin cascade)
 		int orphanedAlerts = alertService.cleanupOrphanedAlerts();
 		if (orphanedAlerts > 0) {
 			log.info("sync_cleanup_orphaned_alerts profileId={} deleted={}", profileId, orphanedAlerts);
@@ -70,7 +69,6 @@ public class SyncService {
 		List<String> failedCropIds = new ArrayList<>();
 		List<String> failedEventIds = new ArrayList<>();
 
-		// 1. Sincronizar cultivos — batch check para evitar N+1
 		if (!request.crops().isEmpty()) {
 			Set<UUID> requestedCropIds = request.crops().stream()
 					.map(CropRequest::id)
@@ -84,18 +82,15 @@ public class SyncService {
 				try {
 					UUID existingOwnerId = existingCropOwnerMap.get(cropReq.id());
 					if (existingOwnerId != null) {
-						// El cultivo ya existe — verificar propiedad
 						if (!existingOwnerId.equals(profileId)) {
 							log.warn("sync_crop_conflict cropId={} requesterId={} ownerId={}",
 									cropReq.id(), profileId, existingOwnerId);
 							failedCropIds.add(cropReq.id().toString());
 							continue;
 						}
-						// Pertenece al mismo usuario — actualizar
 						CropResponse updated = cropService.updateCrop(cropReq.id(), profileId, cropReq);
 						syncedCrops.add(updated);
 					} else {
-						// No existe — crear
 						CropResponse created = cropService.createCrop(profileId, cropReq);
 						syncedCrops.add(created);
 					}
@@ -106,7 +101,6 @@ public class SyncService {
 			}
 		}
 
-		// 2. Sincronizar eventos — batch check para evitar N+1
 		if (!request.events().isEmpty()) {
 			Set<UUID> requestedEventIds = request.events().stream()
 					.map(CropEventRequest::id)
@@ -123,7 +117,6 @@ public class SyncService {
 						CropEventResponse created = cropEventService.createEventFromSync(profileId, eventReq);
 						syncedEvents.add(created);
 					} else {
-						// Evento ya existe — actualizar
 						CropEventResponse updated = cropEventService.updateEvent(eventReq.id(), profileId, eventReq);
 						syncedEvents.add(updated);
 					}
@@ -134,7 +127,6 @@ public class SyncService {
 			}
 		}
 
-		// 3. Procesar decisiones sobre recomendaciones
 		List<String> failedDecisionIds = new ArrayList<>();
 		for (RecommendationDecisionRequest decision : request.decisions()) {
 			try {

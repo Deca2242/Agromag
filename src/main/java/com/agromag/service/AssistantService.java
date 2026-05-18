@@ -25,6 +25,12 @@ import com.agromag.service.WebSearchService.WebSearchSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -54,7 +60,7 @@ public class AssistantService {
 	private static final int MAX_PENDING_RECOMMENDATIONS = 5;
 	private static final int MAX_RECENT_EVENTS = 8;
 	private static final int MAX_HISTORY_TURNS = 10;
-	private static final String ASSISTANT_MODEL_LABEL = "DeepSeek via OpenRouter";
+	private static final String CONTEXT_CACHE = "assistantContext";
 
 	private enum AssistantIntent {
 		SUMMARY,
@@ -75,6 +81,7 @@ public class AssistantService {
 	private final CropEventRepository cropEventRepository;
 	private final ClimateService climateService;
 	private final WebSearchService webSearchService;
+	private final CacheManager cacheManager;
 
 	public AssistantService(
 			ChatClient.Builder chatClientBuilder,
@@ -84,7 +91,8 @@ public class AssistantService {
 			RecommendationRepository recommendationRepository,
 			CropEventRepository cropEventRepository,
 			ClimateService climateService,
-			WebSearchService webSearchService) {
+			WebSearchService webSearchService,
+			CacheManager cacheManager) {
 		this.chatClient = chatClientBuilder.build();
 		this.profileService = profileService;
 		this.cropRepository = cropRepository;
@@ -93,6 +101,7 @@ public class AssistantService {
 		this.cropEventRepository = cropEventRepository;
 		this.climateService = climateService;
 		this.webSearchService = webSearchService;
+		this.cacheManager = cacheManager;
 	}
 
 	public ProfileResponse getOrCreateProfileForChat(UUID profileId, String email) {
@@ -125,7 +134,7 @@ public class AssistantService {
 	public ChatResponse respond(UUID profileId, String email, ChatRequest req) {
 		ProfileResponse profile = getOrCreateProfileForChat(profileId, email);
 
-		UserContext ctx = buildUserContext(profileId, profile);
+		UserContext ctx = getCachedContext(profileId);
 
 		List<String> suggestions = generateSuggestions(ctx);
 		boolean useWebSearch = shouldUseWebSearch(req.message());
@@ -134,25 +143,20 @@ public class AssistantService {
 			return new ChatResponse(directReply, Instant.now(), suggestions);
 		}
 
-		String systemPrompt = buildSystemPrompt(profile, ctx, useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
+		String systemPrompt = buildSystemPrompt(profile, ctx,
+				useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
 
-		var prompt = chatClient.prompt().system(systemPrompt);
+		List<Message> history = buildHistoryMessages(req.history());
 
-		List<ChatRequest.ChatTurn> history = req.history();
-		if (history != null && !history.isEmpty()) {
-			int start = Math.max(0, history.size() - MAX_HISTORY_TURNS);
-			for (int i = start; i < history.size(); i++) {
-				var turn = history.get(i);
-				if ("user".equals(turn.role())) {
-					prompt = prompt.user(turn.content());
-				} else if ("assistant".equals(turn.role())) {
-					prompt = prompt.system("Asistente (turno anterior): " + turn.content());
-				}
-			}
-		}
-
-		String reply = prompt.user(req.message()).call().content();
-		return new ChatResponse(sanitizeAssistantReply(reply), Instant.now(), suggestions);
+		String reply = sanitizeAssistantReply(
+				chatClient.prompt()
+						.system(systemPrompt)
+						.messages(history)
+						.user(req.message())
+						.call()
+						.content()
+		);
+		return new ChatResponse(reply, Instant.now(), suggestions);
 	}
 
 	public void streamResponse(UUID profileId, String email, ChatRequest req, SseEmitter emitter) {
@@ -168,7 +172,7 @@ public class AssistantService {
 		CompletableFuture.runAsync(() -> {
 			try {
 				ProfileResponse profile = getOrCreateProfileForChat(profileId, email);
-				UserContext ctx = buildUserContext(profileId, profile);
+				UserContext ctx = getCachedContext(profileId);
 				List<String> suggestions = generateSuggestions(ctx);
 				boolean useWebSearch = shouldUseWebSearch(req.message());
 				String directReply = useWebSearch ? null : buildDirectReply(req.message(), ctx);
@@ -182,45 +186,69 @@ public class AssistantService {
 					return;
 				}
 
-				String systemPrompt = buildSystemPrompt(profile, ctx, useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
+				String systemPrompt = buildSystemPrompt(profile, ctx,
+						useWebSearch ? buildWebContext(req.message(), profile, ctx) : null);
 
 				log.debug("assistant_system_prompt_length={}", systemPrompt.length());
 
-				var prompt = chatClient.prompt().system(systemPrompt);
+				List<Message> history = buildHistoryMessages(req.history());
+
 				if (!completed.get()) {
 					sendSse(emitter, "status", "AGROBOT está pensando...");
 				}
 
-				List<ChatRequest.ChatTurn> history = req.history();
-				if (history != null && !history.isEmpty()) {
-					int start = Math.max(0, history.size() - MAX_HISTORY_TURNS);
-					for (int i = start; i < history.size(); i++) {
-						var turn = history.get(i);
-						if ("user".equals(turn.role())) {
-							prompt = prompt.user(turn.content());
-						} else if ("assistant".equals(turn.role())) {
-							prompt = prompt.system("Asistente (turno anterior): " + turn.content());
+				chatClient.prompt()
+						.system(systemPrompt)
+						.messages(history)
+						.user(req.message())
+						.stream()
+						.content()
+					.doOnNext(token -> {
+						if (!completed.get()) {
+							String sanitized = sanitizeToken(token);
+							// isBlank() descartaría tokens de espacio (" ") produciendo
+							// palabras pegadas en el cliente. Solo se omiten cadenas vacías.
+							if (!sanitized.isEmpty()) {
+								try {
+									sendSse(emitter, "token", sanitized);
+								} catch (IOException e) {
+									log.debug("assistant_token_send_failed", e);
+									completed.set(true);
+								}
+							}
 						}
-					}
-				}
+					})
+						.doOnComplete(() -> {
+							if (!completed.get()) {
+								try {
+									sendSse(emitter, "suggestions", suggestions);
+									sendSse(emitter, "done", "");
+								} catch (IOException e) {
+									log.debug("assistant_done_send_failed", e);
+								}
+								emitter.complete();
+							}
+						})
+						.doOnError(e -> {
+							log.error("assistant_stream_error", e);
+							if (!completed.get()) {
+								try {
+									sendSse(emitter, "error",
+											"AGROBOT no pudo responder en este momento. Intenta nuevamente.");
+								} catch (IOException ex) {
+									log.debug("assistant_stream_error_notification_failed", ex);
+								}
+								emitter.completeWithError(e);
+							}
+						})
+						.subscribe();
 
-				String fullReply = sanitizeAssistantReply(prompt.user(req.message()).call().content());
-
-				if (!completed.get()) {
-					if (fullReply.isBlank()) {
-						sendSse(emitter, "token", "No pude generar una respuesta en este momento.");
-					} else {
-						sendTypingChunks(emitter, completed, fullReply);
-					}
-					sendSse(emitter, "suggestions", suggestions);
-					sendSse(emitter, "done", "");
-				}
-				emitter.complete();
 			} catch (Exception e) {
-				log.error("assistant_stream_error", e);
+				log.error("assistant_stream_setup_error", e);
 				if (!completed.get()) {
 					try {
-						sendSse(emitter, "error", "AGROBOT no pudo responder en este momento. Intenta nuevamente.");
+						sendSse(emitter, "error",
+								"AGROBOT no pudo responder en este momento. Intenta nuevamente.");
 					} catch (IOException ex) {
 						log.debug("assistant_stream_error_notification_failed", ex);
 					}
@@ -232,6 +260,27 @@ public class AssistantService {
 
 	public UserContext buildUserContext(UUID profileId, ProfileResponse profile) {
 		return buildUserContextInternal(profileId);
+	}
+
+	/**
+	 * Returns the user context from the cache if available; otherwise builds and
+	 * caches it. Uses programmatic cache access to avoid Spring AOP self-invocation
+	 * limitations.
+	 */
+	private UserContext getCachedContext(UUID profileId) {
+		Cache cache = cacheManager.getCache(CONTEXT_CACHE);
+		if (cache != null) {
+			Cache.ValueWrapper wrapper = cache.get(profileId);
+			if (wrapper != null) {
+				log.debug("assistant_context_cache_hit profileId={}", profileId);
+				return (UserContext) wrapper.get();
+			}
+		}
+		UserContext ctx = buildUserContextInternal(profileId);
+		if (cache != null) {
+			cache.put(profileId, ctx);
+		}
+		return ctx;
 	}
 
 	private UserContext buildUserContextInternal(UUID profileId) {
@@ -284,6 +333,30 @@ public class AssistantService {
 		}
 	}
 
+	/** Builds a properly-typed message list for conversation history. */
+	private List<Message> buildHistoryMessages(List<ChatRequest.ChatTurn> history) {
+		if (history == null || history.isEmpty()) {
+			return List.of();
+		}
+		List<Message> messages = new ArrayList<>();
+		int start = Math.max(0, history.size() - MAX_HISTORY_TURNS);
+		for (int i = start; i < history.size(); i++) {
+			ChatRequest.ChatTurn turn = history.get(i);
+			if ("user".equals(turn.role())) {
+				messages.add(new UserMessage(turn.content()));
+			} else if ("assistant".equals(turn.role())) {
+				messages.add(new AssistantMessage(turn.content()));
+			}
+		}
+		return messages;
+	}
+
+	/** Strips markdown markers from a streaming token. */
+	private String sanitizeToken(String token) {
+		if (token == null) return "";
+		return token.replace("**", "").replace("__", "");
+	}
+
 	String buildSystemPrompt(ProfileResponse profile, UserContext ctx) {
 		return buildSystemPrompt(profile, ctx, null);
 	}
@@ -297,7 +370,7 @@ public class AssistantService {
 	}
 
 	private String buildSystemPromptInternal(String fullName, Municipality municipality, UserContext ctx, String webContext) {
-		return AssistantPromptBuilder.build(ASSISTANT_MODEL_LABEL, fullName, municipality, ctx, webContext);
+		return AssistantPromptBuilder.build(fullName, municipality, ctx, webContext);
 	}
 
 	private String sanitizeAssistantReply(String reply) {

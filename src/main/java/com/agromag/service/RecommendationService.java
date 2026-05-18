@@ -11,6 +11,7 @@ import com.agromag.domain.enums.SyncStatus;
 import com.agromag.domain.model.ClimateData;
 import com.agromag.dto.request.RecommendationDecisionRequest;
 import com.agromag.dto.response.FertilizerRecommendationResponse;
+import com.agromag.dto.response.RecommendationParametersResponse;
 import com.agromag.dto.response.IrrigationRecommendationResponse;
 import com.agromag.dto.response.PhytosanitaryRecommendationResponse;
 import com.agromag.dto.response.RecommendationResponse;
@@ -71,6 +72,12 @@ public class RecommendationService {
 		this.climateService = climateService;
 		this.aiRecommendationService = aiRecommendationService;
 		this.props = props;
+	}
+
+	@Transactional(readOnly = true)
+	public java.util.Map<String, String> getRecommendationParametersFlat() {
+		var cropParams = cropParameterRepository.findAllByOrderByCropTypeAsc();
+		return RecommendationParametersResponse.from(props, cropParams).toFlatMap();
 	}
 
 	@Transactional(readOnly = true)

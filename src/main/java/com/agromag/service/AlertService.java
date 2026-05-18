@@ -247,7 +247,7 @@ public class AlertService {
 	}
 
 	private void createAlert(Crop crop, RecommendationType type, AlertSeverity severity,
-							 String title, String message, int iconCode) {
+		String title, String message, int iconCode) {
 		// Evita alertas duplicadas recientes del mismo tipo y cultivo.
 		LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
 		boolean recentExists = alertRepository.existsRecentUnread(
